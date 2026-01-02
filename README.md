@@ -20,7 +20,7 @@ Requirements for building, testing, and deploying the protocol:
 
 1. **Clone the repository:**
    ```powershell
-   git clone [https://github.com/your-username/reset.git](https://github.com/your-username/reset.git)
+   git clone [https://github.com/ramosdalrymple-afk/reset_app.git(https://github.com/ramosdalrymple-afk/reset_app.git)
    cd reset
 
 2. **Install Flutter dependencies:**
