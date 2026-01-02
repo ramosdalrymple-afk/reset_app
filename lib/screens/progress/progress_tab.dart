@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
-import 'package:my_auth_project/services/habit_provider.dart'; // NEW IMPORT
-import 'package:my_auth_project/models/habit_model.dart'; // NEW IMPORT
+import 'package:my_auth_project/services/habit_provider.dart';
+import 'package:my_auth_project/models/habit_model.dart';
 
 class ProgressTab extends StatefulWidget {
   const ProgressTab({super.key});
@@ -100,12 +100,10 @@ class _ProgressTabState extends State<ProgressTab>
   Widget build(BuildContext context) {
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
 
-    // 1. REPLACED StreamBuilder with Consumer<HabitProvider>
     return Consumer<HabitProvider>(
       builder: (context, habitProvider, child) {
         final currentHabit = habitProvider.selectedHabit;
 
-        // Handle Empty/Loading State
         if (habitProvider.isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -113,14 +111,13 @@ class _ProgressTabState extends State<ProgressTab>
           return const Center(child: Text("No habit selected."));
         }
 
-        // 2. USE DATA FROM HABIT MODEL
         final DateTime startDate = currentHabit.startDate;
         final Duration diff = DateTime.now().difference(startDate);
 
-        // Use data directly from the model (Provider fetches it)
         final int storedLongest = currentHabit.longestStreak;
         final int totalRelapses = currentHabit.totalRelapses;
         final Map<String, dynamic> history = currentHabit.history;
+        final Map<String, int> triggerStats = currentHabit.triggerStats;
 
         return Scaffold(
           body: Stack(
@@ -135,7 +132,9 @@ class _ProgressTabState extends State<ProgressTab>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 20),
+                      // Space for GlobalAppBar
+                      const SizedBox(height: 60),
+
                       Text(
                         "My Progress",
                         style: TextStyle(
@@ -146,7 +145,7 @@ class _ProgressTabState extends State<ProgressTab>
                         ),
                       ),
                       Text(
-                        currentHabit.title, // Display Habit Name
+                        currentHabit.title,
                         style: TextStyle(
                           fontSize: 14,
                           color: isDark ? Colors.white54 : Colors.black54,
@@ -180,6 +179,21 @@ class _ProgressTabState extends State<ProgressTab>
                       ),
                       const SizedBox(height: 32),
                       _buildCalendarCard(history, isDark),
+                      const SizedBox(height: 32),
+
+                      // --- NEW VULNERABILITY SECTION ---
+                      Text(
+                        "Vulnerability Analysis",
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _buildTriggerAnalysis(triggerStats, isDark),
+
                       const SizedBox(height: 50),
                     ],
                   ),
@@ -192,7 +206,97 @@ class _ProgressTabState extends State<ProgressTab>
     );
   }
 
-  // ... (Keep _buildStatBox unchanged) ...
+  Widget _buildTriggerAnalysis(Map<String, int> stats, bool isDark) {
+    if (stats.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withOpacity(0.05)
+              : Colors.black.withOpacity(0.02),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Center(
+          child: Text(
+            "No relapse data yet. Stay strong!",
+            style: TextStyle(color: Colors.grey),
+          ),
+        ),
+      );
+    }
+
+    // Sort stats by count descending
+    final sortedEntries = stats.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    final maxCount = sortedEntries.first.value;
+
+    return Column(
+      children: sortedEntries.map((entry) {
+        final double percent = entry.value / maxCount;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    entry.key,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                  Text(
+                    "${entry.value} times",
+                    style: const TextStyle(
+                      color: Colors.blueAccent,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Stack(
+                children: [
+                  Container(
+                    height: 8,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white10 : Colors.black12,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  AnimatedContainer(
+                    duration: const Duration(seconds: 1),
+                    height: 8,
+                    width: MediaQuery.of(context).size.width * 0.7 * percent,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Colors.blueAccent, Colors.cyanAccent],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.blueAccent.withOpacity(0.3),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _buildStatBox(
     String label,
     String value,
@@ -319,7 +423,6 @@ class _ProgressTabState extends State<ProgressTab>
     );
   }
 
-  // ... (Keep _buildCalendarDay, _buildLegend, _legendItem unchanged) ...
   Widget _buildCalendarDay(DateTime day, Color color, bool isDark) {
     return Container(
       margin: const EdgeInsets.all(6),

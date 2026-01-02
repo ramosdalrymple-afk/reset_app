@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:my_auth_project/screens/motivation/motivation_tab.dart';
-import 'package:my_auth_project/screens/progress/progress_tab.dart';
 import 'package:provider/provider.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
 
-// Ensure these imports point to where you actually saved the files
 import 'package:my_auth_project/screens/home/home_tab.dart';
+import 'package:my_auth_project/screens/progress/progress_tab.dart';
+import 'package:my_auth_project/screens/motivation/motivation_tab.dart';
 import 'package:my_auth_project/screens/settings/settings_tab.dart';
+
+import '../../widgets/global_app_bar.dart';
 
 class Navbar extends StatefulWidget {
   const Navbar({super.key});
@@ -30,33 +32,39 @@ class _NavbarState extends State<Navbar> {
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: const GlobalAppBar(),
       body: IndexedStack(index: _selectedIndex, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) =>
             setState(() => _selectedIndex = index),
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        elevation: 0,
         indicatorColor: isDark
             ? Colors.blueAccent.withOpacity(0.2)
             : Colors.blue.withOpacity(0.1),
-        destinations: const [
+        destinations: [
           NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home),
+            icon: Icon(PhosphorIcons.house()),
+            selectedIcon: Icon(PhosphorIcons.house(PhosphorIconsStyle.fill)),
             label: 'Home',
           ),
           NavigationDestination(
-            icon: Icon(Icons.bar_chart_rounded),
+            icon: Icon(PhosphorIcons.chartBar()),
+            selectedIcon: Icon(PhosphorIcons.chartBar(PhosphorIconsStyle.fill)),
             label: 'Progress',
           ),
           NavigationDestination(
-            icon: Icon(Icons.auto_awesome_outlined),
-            selectedIcon: Icon(Icons.auto_awesome),
+            icon: Icon(PhosphorIcons.lightning()),
+            selectedIcon: Icon(
+              PhosphorIcons.lightning(PhosphorIconsStyle.fill),
+            ),
             label: 'Motivation',
           ),
           NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
+            icon: Icon(PhosphorIcons.gear()),
+            selectedIcon: Icon(PhosphorIcons.gear(PhosphorIconsStyle.fill)),
             label: 'Settings',
           ),
         ],

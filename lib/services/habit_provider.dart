@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,7 +20,6 @@ class HabitProvider with ChangeNotifier {
     if (user == null) return;
 
     _isLoading = true;
-    // Notify listeners removed here to prevent build errors during init
 
     try {
       final snapshot = await FirebaseFirestore.instance
@@ -116,7 +117,7 @@ class HabitProvider with ChangeNotifier {
     }
   }
 
-  // --- NEW: MARK DAY AS CLEAN ---
+  // --- MARK DAY AS CLEAN ---
   Future<void> markDayClean(String habitId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -133,7 +134,6 @@ class HabitProvider with ChangeNotifier {
           .doc(habitId)
           .update({'history.$dateKey': 'clean'});
 
-      // Refresh to update UI
       await fetchHabits();
     } catch (e) {
       debugPrint("Error marking clean: $e");
@@ -141,27 +141,50 @@ class HabitProvider with ChangeNotifier {
     }
   }
 
-  // --- NEW: RESET HABIT (RELAPSE) ---
-  Future<void> resetHabit(String habitId) async {
+  // --- RESET HABIT (RELAPSE) WITH TRIGGER MAP ---
+  Future<void> resetHabit(String habitId, {required String trigger}) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
     try {
+      // 1. Find the local habit to calculate if this was a new longest streak
+      final habit = _habits.firstWhere((h) => h.id == habitId);
+      final currentStreakDays = DateTime.now()
+          .difference(habit.startDate)
+          .inDays;
+
+      int newLongestStreak = habit.longestStreak;
+      if (currentStreakDays > habit.longestStreak) {
+        newLongestStreak = currentStreakDays;
+      }
+
+      // 2. Update Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('habits')
           .doc(habitId)
           .update({
-            'startDate': Timestamp.now(), // Reset start date to NOW
+            'startDate': Timestamp.now(), // Reset clock to NOW
             'totalRelapses': FieldValue.increment(1),
+            'longestStreak': newLongestStreak,
+            // Use dot notation to increment the specific trigger count
+            'triggerStats.$trigger': FieldValue.increment(1),
+            // Mark today as a relapse in history
+            'history.${_getTodayKey()}': 'relapse',
           });
 
-      // Refresh to update UI
+      // 3. Refresh data
       await fetchHabits();
     } catch (e) {
       debugPrint("Error resetting habit: $e");
       rethrow;
     }
+  }
+
+  // Helper for consistent date keys
+  String _getTodayKey() {
+    final now = DateTime.now();
+    return "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
   }
 }

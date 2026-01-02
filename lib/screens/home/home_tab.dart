@@ -1,14 +1,19 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart'; // Added for HapticFeedback
 import 'package:provider/provider.dart';
-import 'package:my_auth_project/services/auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:my_auth_project/services/auth_service.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
 import 'package:my_auth_project/services/habit_provider.dart';
 import 'package:my_auth_project/models/habit_model.dart';
-import 'package:my_auth_project/screens/settings/widget/add_habit_sheet.dart';
+
+// Widgets
+import 'widgets/animated_background.dart';
+import 'widgets/time_bar.dart';
+import 'widgets/quote_card.dart';
+import 'widgets/action_buttons.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -86,7 +91,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
         return Scaffold(
           body: Stack(
             children: [
-              _buildAnimatedBackground(isDark),
+              AnimatedBackground(controller: _bgController, isDark: isDark),
               _buildHomeContent(
                 context,
                 habitProvider,
@@ -109,18 +114,20 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     bool isDark,
   ) {
     final Duration diff = DateTime.now().difference(habit.startDate);
-    final now = DateTime.now();
-    final String dateKey =
-        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
 
-    final String? todayStatus = habit.history[dateKey];
-    bool isAlreadyClean = todayStatus == 'clean';
-    bool isStreakTooShort = diff.inSeconds < 30;
-
+    // Calculate Percentages
     double secPercent = (diff.inSeconds % 60) / 60.0;
     double minPercent = (diff.inMinutes % 60) / 60.0;
     double hourPercent = (diff.inHours % 24) / 24.0;
     double dayPercent = (diff.inDays % 30) / 30.0;
+
+    // Logic Checks
+    final now = DateTime.now();
+    final String dateKey =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    final String? todayStatus = habit.history[dateKey];
+    bool isAlreadyClean = todayStatus == 'clean';
+    bool isStreakTooShort = diff.inSeconds < 30;
 
     return SafeArea(
       child: LayoutBuilder(
@@ -134,69 +141,60 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    // TOP SECTION
                     Column(
                       children: [
-                        const SizedBox(height: 10),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _buildHabitSwitcher(
-                              context,
-                              habitProvider,
-                              habit,
-                              isDark,
-                            ),
-                            _buildUserAvatar(user, isDark),
-                          ],
-                        ),
-                        const SizedBox(height: 25),
+                        // Space for GlobalAppBar
+                        const SizedBox(height: 60),
+
                         _buildHeader(habit.title, isDark),
                         const SizedBox(height: 30),
 
-                        _buildTimeBar(
-                          "${diff.inDays}",
-                          "days",
-                          const Color(0xFF2DD4BF),
-                          dayPercent,
-                          isDark,
+                        TimeBar(
+                          value: "${diff.inDays}",
+                          label: "days",
+                          color: const Color(0xFF2DD4BF),
+                          percentage: dayPercent,
+                          isDark: isDark,
                         ),
                         const SizedBox(height: 12),
-                        _buildTimeBar(
-                          "${diff.inHours % 24}",
-                          "hours",
-                          const Color(0xFF3B82F6),
-                          hourPercent,
-                          isDark,
+                        TimeBar(
+                          value: "${diff.inHours % 24}",
+                          label: "hours",
+                          color: const Color(0xFF3B82F6),
+                          percentage: hourPercent,
+                          isDark: isDark,
                         ),
                         const SizedBox(height: 12),
-                        _buildTimeBar(
-                          "${diff.inMinutes % 60}",
-                          "minutes",
-                          const Color(0xFF6366F1),
-                          minPercent,
-                          isDark,
+                        TimeBar(
+                          value: "${diff.inMinutes % 60}",
+                          label: "minutes",
+                          color: const Color(0xFF6366F1),
+                          percentage: minPercent,
+                          isDark: isDark,
                         ),
                         const SizedBox(height: 12),
-                        _buildTimeBar(
-                          "${diff.inSeconds % 60}",
-                          "seconds",
-                          const Color(0xFF8B5CF6),
-                          secPercent,
-                          isDark,
+                        TimeBar(
+                          value: "${diff.inSeconds % 60}",
+                          label: "seconds",
+                          color: const Color(0xFF8B5CF6),
+                          percentage: secPercent,
+                          isDark: isDark,
                         ),
                       ],
                     ),
 
+                    // BOTTOM SECTION
                     Column(
                       children: [
                         const SizedBox(height: 40),
-                        _buildQuoteCard(isDark),
+                        QuoteCard(isDark: isDark, quote: _getQuote()),
                         const SizedBox(height: 32),
-                        _buildButtonRow(
-                          isAlreadyClean,
-                          isStreakTooShort,
-                          context,
-                          habit,
+                        ActionButtons(
+                          isAlreadyClean: isAlreadyClean,
+                          isStreakTooShort: isStreakTooShort,
+                          onCleanTap: () => _confirmClean(context, habit),
+                          onRelapseTap: () => _confirmReset(context, habit),
                         ),
                         const SizedBox(height: 20),
                       ],
@@ -211,236 +209,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     );
   }
 
-  Widget _buildUserAvatar(User? user, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.15)
-              : Colors.black.withOpacity(0.1),
-          width: 1,
-        ),
-      ),
-      child: CircleAvatar(
-        radius: 18,
-        backgroundColor: isDark
-            ? Colors.white.withOpacity(0.1)
-            : Colors.grey[200],
-        backgroundImage: user?.photoURL != null
-            ? NetworkImage(user!.photoURL!)
-            : null,
-        child: user?.photoURL == null
-            ? Icon(
-                Icons.person,
-                size: 20,
-                color: isDark ? Colors.white70 : Colors.black54,
-              )
-            : null,
-      ),
-    );
-  }
-
-  Widget _buildHabitSwitcher(
-    BuildContext context,
-    HabitProvider provider,
-    Habit currentHabit,
-    bool isDark,
-  ) {
-    return GestureDetector(
-      onTap: () => _showHabitSelectorSheet(context, provider, isDark),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withOpacity(0.08)
-                  : Colors.black.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: isDark ? Colors.white12 : Colors.black12,
-                width: 1,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF2DD4BF),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  currentHabit.title,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isDark
-                        ? Colors.white.withOpacity(0.9)
-                        : Colors.black87,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  size: 16,
-                  color: isDark ? Colors.white54 : Colors.black45,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showHabitSelectorSheet(
-    BuildContext context,
-    HabitProvider provider,
-    bool isDark,
-  ) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF0F172A) : Colors.white,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Switch Habit",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ...provider.habits.map((h) {
-                final isSelected = h.id == provider.selectedHabit?.id;
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? Colors.blueAccent
-                          : (isDark ? Colors.white10 : Colors.grey[200]),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.star,
-                      size: 20,
-                      color: isSelected
-                          ? Colors.white
-                          : (isDark ? Colors.grey : Colors.grey[700]),
-                    ),
-                  ),
-                  title: Text(
-                    h.title,
-                    style: TextStyle(
-                      fontWeight: isSelected
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                      color: isSelected
-                          ? Colors.blueAccent
-                          : (isDark ? Colors.white : Colors.black),
-                    ),
-                  ),
-                  trailing: isSelected
-                      ? const Icon(Icons.check, color: Colors.blueAccent)
-                      : null,
-                  onTap: () {
-                    provider.selectHabit(h);
-                    Navigator.pop(ctx);
-                  },
-                );
-              }),
-              const Divider(height: 30),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton.icon(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => const AddHabitSheet(),
-                    );
-                  },
-                  icon: const Icon(Icons.add_circle_outline),
-                  label: const Text("Create New Habit"),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    foregroundColor: isDark ? Colors.white70 : Colors.black87,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAnimatedBackground(bool isDark) {
-    return AnimatedBuilder(
-      animation: _bgController,
-      builder: (context, child) {
-        return Stack(
-          children: [
-            Container(color: Theme.of(context).scaffoldBackgroundColor),
-            Positioned(
-              top: -100 + (50 * _bgController.value),
-              right: -50,
-              child: Container(
-                width: 300,
-                height: 300,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isDark
-                      ? Colors.blue.withOpacity(0.05)
-                      : Colors.blue.withOpacity(0.1),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 100 - (50 * _bgController.value),
-              left: -100,
-              child: Container(
-                width: 400,
-                height: 400,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isDark
-                      ? Colors.purple.withOpacity(0.05)
-                      : Colors.purple.withOpacity(0.1),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
+  // --- HELPER METHODS ---
 
   Widget _buildHeader(String habitName, bool isDark) {
     return Column(
@@ -466,240 +235,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     );
   }
 
-  Widget _buildTimeBar(
-    String value,
-    String label,
-    Color color,
-    double percentage,
-    bool isDark,
-  ) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Stack(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                child: Container(
-                  height: 60,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.05)
-                        : Colors.black.withOpacity(0.03),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isDark ? Colors.white10 : Colors.black12,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            TweenAnimationBuilder<double>(
-              tween: Tween<double>(begin: 0, end: percentage.clamp(0.02, 1.0)),
-              duration: const Duration(milliseconds: 500),
-              curve: Curves.easeOutCubic,
-              builder: (context, animatedWeight, child) {
-                return ClipPath(
-                  clipper: TimeBarClipper(),
-                  child: Container(
-                    height: 60,
-                    width: constraints.maxWidth * animatedWeight,
-                    decoration: BoxDecoration(
-                      color: color,
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withOpacity(0.3),
-                          blurRadius: 10,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(12),
-                        bottomLeft: Radius.circular(12),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-            _buildBarText(value, label),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildBarText(String value, String label) {
-    return Container(
-      height: 60,
-      padding: const EdgeInsets.only(left: 20),
-      alignment: Alignment.centerLeft,
-      child: RichText(
-        text: TextSpan(
-          children: [
-            TextSpan(
-              text: value.padLeft(2, '0'),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 30,
-                fontWeight: FontWeight.w900,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-            const WidgetSpan(child: SizedBox(width: 8)),
-            TextSpan(
-              text: label,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.9),
-                fontSize: 18,
-                fontWeight: FontWeight.w300,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuoteCard(bool isDark) {
-    return FadeInUp(
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withOpacity(0.05)
-                  : Colors.blue.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: isDark ? Colors.white10 : Colors.blue.withOpacity(0.2),
-              ),
-              boxShadow: [
-                if (isDark)
-                  BoxShadow(
-                    color: Colors.blueAccent.withOpacity(0.1),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.format_quote_rounded,
-                  color: isDark
-                      ? Colors.blueAccent.withOpacity(0.5)
-                      : Colors.blueAccent,
-                  size: 32,
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  _getQuote(),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontStyle: FontStyle.italic,
-                    fontWeight: FontWeight.w500,
-                    color: isDark
-                        ? Colors.white.withOpacity(0.9)
-                        : Colors.black87,
-                    height: 1.5,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  height: 2,
-                  width: 30,
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.blueAccent.withOpacity(0.3)
-                        : Colors.blueAccent.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildButtonRow(
-    bool isAlreadyClean,
-    bool isStreakTooShort,
-    BuildContext context,
-    Habit habit,
-  ) {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildActionButton(
-            isAlreadyClean ? "Done for Today" : "I'm Clean Today",
-            isAlreadyClean
-                ? Colors.grey.withOpacity(0.5)
-                : const Color(0xFF2563EB),
-            Icons.check_circle_outline,
-            isAlreadyClean
-                ? null
-                : () {
-                    HapticFeedback.mediumImpact();
-                    _confirmClean(context, habit);
-                  },
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildActionButton(
-            "I Relapsed",
-            isStreakTooShort
-                ? Colors.grey.withOpacity(0.5)
-                : const Color(0xFF991B1B),
-            Icons.history_rounded,
-            isStreakTooShort
-                ? null
-                : () {
-                    HapticFeedback.heavyImpact();
-                    _confirmReset(context, habit);
-                  },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButton(
-    String label,
-    Color color,
-    IconData icon,
-    VoidCallback? onPressed,
-  ) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 18),
-      label: Text(
-        label,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        elevation: onPressed == null ? 0 : 4,
-        shadowColor: color.withOpacity(0.5),
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      ),
-    );
-  }
+  // --- DIALOGS ---
 
   void _confirmClean(BuildContext context, Habit habit) {
     final isDark = Provider.of<ThemeProvider>(
@@ -728,7 +264,6 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
             TextButton(
               onPressed: () async {
                 Navigator.pop(confirmContext);
-                // --- CALLING PROVIDER LOGIC ---
                 await Provider.of<HabitProvider>(
                   context,
                   listen: false,
@@ -750,74 +285,126 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
       context,
       listen: false,
     ).isDarkMode;
+    String? selectedTrigger;
+
+    final List<Map<String, dynamic>> triggers = [
+      {'name': 'Stress', 'icon': Icons.bolt, 'color': Colors.orangeAccent},
+      {'name': 'Boredom', 'icon': Icons.tv, 'color': Colors.blueAccent},
+      {'name': 'Social', 'icon': Icons.people, 'color': Colors.greenAccent},
+      {
+        'name': 'Anxiety',
+        'icon': Icons.psychology,
+        'color': Colors.purpleAccent,
+      },
+      {'name': 'Urge', 'icon': Icons.water_drop, 'color': Colors.redAccent},
+      {'name': 'Other', 'icon': Icons.more_horiz, 'color': Colors.grey},
+    ];
+
     showDialog(
       context: context,
-      builder: (confirmContext) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: AlertDialog(
-          backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          title: const Text("Be honest with yourself"),
-          content: const Text(
-            "Resetting is an act of courage. Ready to start again?",
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(confirmContext),
-              child: const Text("CANCEL", style: TextStyle(color: Colors.grey)),
-            ),
-            TextButton(
-              onPressed: () async {
-                Navigator.pop(confirmContext);
-                // --- CALLING PROVIDER LOGIC ---
-                await Provider.of<HabitProvider>(
-                  context,
-                  listen: false,
-                ).resetHabit(habit.id);
-              },
-              child: const Text(
-                "START FRESH",
-                style: TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.bold,
+      builder: (confirmContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: AlertDialog(
+              backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+              title: const Text("What was the trigger?"),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                  ),
+                  itemCount: triggers.length,
+                  itemBuilder: (context, index) {
+                    final t = triggers[index];
+                    final isSel = selectedTrigger == t['name'];
+                    return GestureDetector(
+                      onTap: () =>
+                          setDialogState(() => selectedTrigger = t['name']),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        decoration: BoxDecoration(
+                          color: isSel
+                              ? t['color']
+                              : (isDark
+                                    ? Colors.white.withOpacity(0.05)
+                                    : Colors.grey[100]),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSel ? Colors.white38 : Colors.transparent,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              t['icon'],
+                              color: isSel ? Colors.white : t['color'],
+                              size: 24,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              t['name'],
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: isSel
+                                    ? Colors.white
+                                    : (isDark
+                                          ? Colors.white70
+                                          : Colors.black87),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(confirmContext),
+                  child: const Text(
+                    "CANCEL",
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: selectedTrigger == null
+                      ? null
+                      : () async {
+                          Navigator.pop(confirmContext);
+                          await Provider.of<HabitProvider>(
+                            context,
+                            listen: false,
+                          ).resetHabit(habit.id, trigger: selectedTrigger!);
+                        },
+                  child: const Text(
+                    "RESET CLOCK",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
-}
-
-class FadeInUp extends StatelessWidget {
-  final Widget child;
-  const FadeInUp({super.key, required this.child});
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(seconds: 1),
-      builder: (context, value, child) => Opacity(opacity: value, child: child),
-      child: child,
-    );
-  }
-}
-
-class TimeBarClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    Path path = Path();
-    double slantWidth = 35.0;
-    path.lineTo(size.width - slantWidth, 0);
-    path.lineTo(size.width, size.height);
-    path.lineTo(0, size.height);
-    path.close();
-    return path;
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }

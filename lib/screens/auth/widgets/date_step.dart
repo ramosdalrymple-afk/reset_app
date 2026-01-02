@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 class DateStep extends StatefulWidget {
   final DateTime selectedDate;
   final Function(DateTime) onDateChanged;
-
   const DateStep({
     super.key,
     required this.selectedDate,
@@ -19,38 +18,24 @@ class _DateStepState extends State<DateStep> {
   final TextEditingController _monthController = TextEditingController();
   final TextEditingController _dayController = TextEditingController();
   final TextEditingController _yearController = TextEditingController();
-
   final FocusNode _monthFocus = FocusNode();
   final FocusNode _dayFocus = FocusNode();
   final FocusNode _yearFocus = FocusNode();
-
-  @override
-  void dispose() {
-    _monthController.dispose();
-    _dayController.dispose();
-    _yearController.dispose();
-    _monthFocus.dispose();
-    _dayFocus.dispose();
-    _yearFocus.dispose();
-    super.dispose();
-  }
 
   void _validateAndNotify() {
     if (_monthController.text.length == 2 &&
         _dayController.text.length == 2 &&
         _yearController.text.length == 4) {
       try {
-        final int m = int.parse(_monthController.text);
-        final int d = int.parse(_dayController.text);
-        final int y = int.parse(_yearController.text);
-
-        final DateTime date = DateTime(y, m, d);
+        final date = DateTime(
+          int.parse(_yearController.text),
+          int.parse(_monthController.text),
+          int.parse(_dayController.text),
+        );
         if (date.isBefore(DateTime.now().add(const Duration(minutes: 1)))) {
           widget.onDateChanged(date);
         }
-      } catch (e) {
-        // Invalid date logic
-      }
+      } catch (e) {}
     }
   }
 
@@ -59,6 +44,12 @@ class _DateStepState extends State<DateStep> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
+        const Icon(
+          Icons.calendar_month_rounded,
+          size: 60,
+          color: Colors.white24,
+        ),
+        const SizedBox(height: 24),
         const Text(
           "When was your last day?",
           textAlign: TextAlign.center,
@@ -70,113 +61,104 @@ class _DateStepState extends State<DateStep> {
         ),
         const SizedBox(height: 8),
         const Text(
-          "Month / Day / Year",
-          style: TextStyle(color: Colors.white70, fontSize: 14),
-        ),
-        const SizedBox(height: 32),
-
-        // Wrapped in a constrained width to prevent overflow
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 300),
-          child: Row(
-            children: [
-              _buildSmallInput(
-                controller: _monthController,
-                focusNode: _monthFocus,
-                nextFocus: _dayFocus,
-                hint: "MM",
-                maxLength: 2,
-              ),
-              _buildSeparator(),
-              _buildSmallInput(
-                controller: _dayController,
-                focusNode: _dayFocus,
-                nextFocus: _yearFocus,
-                prevFocus: _monthFocus, // Jump back on backspace
-                hint: "DD",
-                maxLength: 2,
-              ),
-              _buildSeparator(),
-              _buildSmallInput(
-                controller: _yearController,
-                focusNode: _yearFocus,
-                nextFocus: null,
-                prevFocus: _dayFocus, // Jump back on backspace
-                hint: "YYYY",
-                maxLength: 4,
-                isYear: true,
-              ),
-            ],
+          "MM / DD / YYYY",
+          style: TextStyle(
+            color: Colors.white38,
+            fontSize: 14,
+            letterSpacing: 2,
           ),
+        ),
+        const SizedBox(height: 40),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _buildInput(
+              _monthController,
+              _monthFocus,
+              _dayFocus,
+              null,
+              "MM",
+              2,
+            ),
+            _buildDiv(),
+            _buildInput(
+              _dayController,
+              _dayFocus,
+              _yearFocus,
+              _monthFocus,
+              "DD",
+              2,
+            ),
+            _buildDiv(),
+            _buildInput(
+              _yearController,
+              _yearFocus,
+              null,
+              _dayFocus,
+              "YYYY",
+              4,
+              isYear: true,
+            ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildSmallInput({
-    required TextEditingController controller,
-    required FocusNode focusNode,
-    FocusNode? nextFocus,
-    FocusNode? prevFocus,
-    required String hint,
-    required int maxLength,
+  Widget _buildDiv() => const Padding(
+    padding: EdgeInsets.symmetric(horizontal: 10),
+    child: Text(
+      "/",
+      style: TextStyle(
+        color: Colors.white12,
+        fontSize: 30,
+        fontWeight: FontWeight.w200,
+      ),
+    ),
+  );
+
+  Widget _buildInput(
+    TextEditingController controller,
+    FocusNode node,
+    FocusNode? next,
+    FocusNode? prev,
+    String hint,
+    int len, {
     bool isYear = false,
   }) {
-    return Expanded(
-      flex: isYear ? 3 : 2, // Year gets slightly more space
-      child: RawKeyboardListener(
-        focusNode: FocusNode(), // Temporary node to catch keys
-        onKey: (event) {
-          if (event is RawKeyDownEvent &&
-              event.logicalKey == LogicalKeyboardKey.backspace &&
-              controller.text.isEmpty &&
-              prevFocus != null) {
-            FocusScope.of(context).requestFocus(prevFocus);
-          }
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white24, width: 1.5),
-          ),
-          child: TextField(
-            controller: controller,
-            focusNode: focusNode,
-            keyboardType: TextInputType.number,
-            textAlign: TextAlign.center,
-            maxLength: maxLength,
-            cursorColor: Colors.white,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: const TextStyle(color: Colors.white24, fontSize: 16),
-              counterText: "",
-              border: InputBorder.none,
-              isDense: true,
-            ),
-            onChanged: (value) {
-              if (value.length == maxLength && nextFocus != null) {
-                FocusScope.of(context).requestFocus(nextFocus);
-              }
-              _validateAndNotify();
-            },
-          ),
-        ),
+    return Container(
+      width: isYear ? 90 : 70,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white12),
       ),
-    );
-  }
-
-  Widget _buildSeparator() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 8),
-      child: Text("/", style: TextStyle(color: Colors.white24, fontSize: 24)),
+      child: TextField(
+        controller: controller,
+        focusNode: node,
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        maxLength: len,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+        ),
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: const TextStyle(color: Colors.white12),
+          counterText: "",
+          border: InputBorder.none,
+          isDense: true,
+        ),
+        onChanged: (v) {
+          if (v.length == len && next != null)
+            FocusScope.of(context).requestFocus(next);
+          _validateAndNotify();
+        },
+      ),
     );
   }
 }

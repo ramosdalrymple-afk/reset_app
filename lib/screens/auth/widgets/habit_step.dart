@@ -3,26 +3,45 @@ import 'package:flutter/material.dart';
 class HabitOption {
   final String name;
   final IconData icon;
-  HabitOption({required this.name, required this.icon});
+  final Color color;
+  HabitOption({required this.name, required this.icon, required this.color});
 }
 
-// Updated list with Masturbation at the start
 final List<HabitOption> predefinedHabits = [
-  HabitOption(name: "Masturbation", icon: Icons.front_hand), // Or Icons.block
-  HabitOption(name: "Alcohol", icon: Icons.local_bar),
-  HabitOption(name: "Smoking", icon: Icons.smoke_free),
-  HabitOption(name: "Social Media", icon: Icons.phone_android),
-  HabitOption(name: "Gaming", icon: Icons.sports_esports),
-  HabitOption(name: "Nicotine", icon: Icons.vape_free),
-  HabitOption(name: "Sugar", icon: Icons.cake),
-  HabitOption(name: "Caffeine", icon: Icons.coffee),
-  HabitOption(name: "Porn", icon: Icons.phone_android),
-  HabitOption(name: "Other", icon: Icons.add),
+  HabitOption(
+    name: "Masturbation",
+    icon: Icons.front_hand,
+    color: Colors.purpleAccent,
+  ),
+  HabitOption(
+    name: "Alcohol",
+    icon: Icons.local_bar,
+    color: Colors.orangeAccent,
+  ),
+  HabitOption(name: "Smoking", icon: Icons.smoke_free, color: Colors.blueGrey),
+  HabitOption(
+    name: "Social Media",
+    icon: Icons.phone_android,
+    color: Colors.blueAccent,
+  ),
+  HabitOption(
+    name: "Gaming",
+    icon: Icons.sports_esports,
+    color: Colors.greenAccent,
+  ),
+  HabitOption(
+    name: "Nicotine",
+    icon: Icons.vape_free,
+    color: Colors.tealAccent,
+  ),
+  HabitOption(name: "Sugar", icon: Icons.cake, color: Colors.pinkAccent),
+  HabitOption(name: "Caffeine", icon: Icons.coffee, color: Colors.brown),
+  HabitOption(name: "Porn", icon: Icons.lock_outline, color: Colors.redAccent),
+  HabitOption(name: "Other", icon: Icons.add, color: Colors.indigoAccent),
 ];
 
 class HabitStep extends StatefulWidget {
   final TextEditingController controller;
-
   const HabitStep({super.key, required this.controller});
 
   @override
@@ -31,13 +50,12 @@ class HabitStep extends StatefulWidget {
 
 class _HabitStepState extends State<HabitStep> {
   String? selectedHabit;
-  bool isCustom = false;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const SizedBox(height: 20),
+        const SizedBox(height: 10),
         const Text(
           "What are you quitting?",
           style: TextStyle(
@@ -51,16 +69,15 @@ class _HabitStepState extends State<HabitStep> {
           "Choose your path to a better you",
           style: TextStyle(color: Colors.white70, fontSize: 16),
         ),
-        const SizedBox(height: 30),
+        const SizedBox(height: 25),
         Expanded(
           child: GridView.builder(
-            // Use BouncingScrollPhysics to make it feel more "modern" on iOS and Android
             physics: const BouncingScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
-              crossAxisSpacing: 15,
-              mainAxisSpacing: 15,
-              childAspectRatio: 1.2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 1.4,
             ),
             itemCount: predefinedHabits.length,
             itemBuilder: (context, index) {
@@ -71,33 +88,28 @@ class _HabitStepState extends State<HabitStep> {
                 onTap: () {
                   setState(() {
                     selectedHabit = habit.name;
-                    if (habit.name == "Other") {
-                      isCustom = true;
-                      widget.controller.clear();
-                    } else {
-                      isCustom = false;
-                      widget.controller.text = habit.name;
-                    }
+                    widget.controller.text = habit.name == "Other"
+                        ? ""
+                        : habit.name;
                   });
                 },
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  curve: Curves.easeInOut,
+                  duration: const Duration(milliseconds: 300),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? Colors.white
+                        ? habit.color
                         : Colors.white.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: isSelected ? Colors.white : Colors.white10,
+                      color: isSelected ? Colors.white38 : Colors.white12,
                       width: 2,
                     ),
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                              color: Colors.white.withOpacity(0.2),
+                              color: habit.color.withOpacity(0.4),
                               blurRadius: 15,
-                              offset: const Offset(0, 8),
+                              offset: const Offset(0, 6),
                             ),
                           ]
                         : [],
@@ -107,26 +119,20 @@ class _HabitStepState extends State<HabitStep> {
                     children: [
                       Icon(
                         habit.icon,
-                        size: 36,
+                        size: 32,
                         color: isSelected
-                            ? const Color(0xFF0D47A1)
-                            : Colors.white,
+                            ? Colors.white
+                            : habit.color.withOpacity(0.8),
                       ),
-                      const SizedBox(height: 12),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Text(
-                          habit.name,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.w500,
-                            color: isSelected
-                                ? const Color(0xFF0D47A1)
-                                : Colors.white,
-                          ),
+                      const SizedBox(height: 8),
+                      Text(
+                        habit.name,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.w500,
+                          color: Colors.white,
                         ),
                       ),
                     ],
@@ -136,20 +142,20 @@ class _HabitStepState extends State<HabitStep> {
             },
           ),
         ),
-        if (isCustom)
+        if (selectedHabit == "Other")
           Padding(
-            padding: const EdgeInsets.only(top: 15, bottom: 10),
+            padding: const EdgeInsets.only(top: 15),
             child: TextField(
               controller: widget.controller,
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 hintText: "Enter custom habit...",
-                hintStyle: const TextStyle(color: Colors.white54),
+                hintStyle: const TextStyle(color: Colors.white38),
                 filled: true,
-                fillColor: Colors.white10,
+                fillColor: Colors.white.withOpacity(0.05),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: Colors.white24),
+                  borderSide: BorderSide.none,
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
