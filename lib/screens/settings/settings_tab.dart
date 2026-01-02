@@ -1,10 +1,18 @@
-import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:my_auth_project/screens/settings/widget/add_habit_sheet.dart';
+import 'package:my_auth_project/screens/settings/widget/settings_card.dart';
+import 'package:my_auth_project/screens/settings/widget/user_header.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:my_auth_project/services/auth_service.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
+import 'package:my_auth_project/services/habit_provider.dart';
+import 'package:my_auth_project/models/habit_model.dart';
+
+// // Import your new widgets
+// import 'widgets/settings_card.dart';
+// import 'widgets/user_header.dart';
+// import 'widgets/add_habit_sheet.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -32,49 +40,6 @@ class _SettingsTabState extends State<SettingsTab>
     super.dispose();
   }
 
-  // NEW: Vertical "Data Stream" Background
-  Widget _buildAnimatedBackground(bool isDark) {
-    return AnimatedBuilder(
-      animation: _bgController,
-      builder: (context, child) {
-        return Stack(
-          children: [
-            Container(color: Theme.of(context).scaffoldBackgroundColor),
-            // Create several vertical drifting lines
-            ...List.generate(5, (index) {
-              double leftPadding =
-                  (MediaQuery.of(context).size.width / 5) * index;
-              return Positioned(
-                left: leftPadding + 20,
-                top:
-                    -200 +
-                    (MediaQuery.of(context).size.height + 200) *
-                        ((_bgController.value + (index * 0.2)) % 1.0),
-                child: Container(
-                  width: 2,
-                  height: 150,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        isDark
-                            ? Colors.blue.withOpacity(0.1)
-                            : Colors.blue.withOpacity(0.2),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = AuthService().currentUser;
@@ -83,15 +48,12 @@ class _SettingsTabState extends State<SettingsTab>
     return Scaffold(
       body: Stack(
         children: [
-          _buildAnimatedBackground(isDark),
-          StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(user?.uid)
-                .snapshots(),
-            builder: (context, snapshot) {
-              final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
-              final String habitName = data['habitName'] ?? "Habit";
+          _buildAnimatedBackground(
+            isDark,
+          ), // Keeping background logic here is fine
+          Consumer<HabitProvider>(
+            builder: (context, habitProvider, child) {
+              final currentHabit = habitProvider.selectedHabit;
 
               return SafeArea(
                 child: SingleChildScrollView(
@@ -103,7 +65,10 @@ class _SettingsTabState extends State<SettingsTab>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 20),
-                      _buildUserHeader(user, isDark),
+
+                      // 1. User Header (Extracted)
+                      UserHeader(user: user),
+
                       const SizedBox(height: 40),
                       const Text(
                         "Settings",
@@ -119,35 +84,79 @@ class _SettingsTabState extends State<SettingsTab>
                       ),
                       const SizedBox(height: 24),
 
-                      // 1. HABIT SECTION
-                      _buildSettingsCard(
-                        context,
-                        title: "Habit",
-                        subtitle: "The habit you are currently tracking.",
+                      // 2. Active Habit Card (Using SettingsCard)
+                      SettingsCard(
+                        title: "Active Habit",
+                        subtitle: "Select which habit to track.",
                         child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              habitName,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                            Expanded(
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<Habit>(
+                                  value: currentHabit,
+                                  isExpanded: true,
+                                  dropdownColor: isDark
+                                      ? const Color(0xFF1E293B)
+                                      : Colors.white,
+                                  hint: const Text("Select a habit"),
+                                  items: habitProvider.habits.map((Habit h) {
+                                    return DropdownMenuItem<Habit>(
+                                      value: h,
+                                      child: Text(
+                                        h.title,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: isDark
+                                              ? Colors.white
+                                              : Colors.black,
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (Habit? newHabit) {
+                                    if (newHabit != null) {
+                                      habitProvider.selectHabit(newHabit);
+                                    }
+                                  },
+                                ),
                               ),
                             ),
-                            const Icon(
-                              Icons.edit_outlined,
-                              size: 20,
-                              color: Colors.blueAccent,
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed: () => showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (_) => const AddHabitSheet(),
+                              ),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.blueAccent.withOpacity(
+                                  0.1,
+                                ),
+                                foregroundColor: Colors.blueAccent,
+                              ),
+                              icon: const Icon(Icons.add),
                             ),
+                            if (currentHabit != null) ...[
+                              const SizedBox(width: 8),
+                              IconButton(
+                                onPressed: () =>
+                                    _confirmDelete(context, currentHabit),
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Colors.red.withOpacity(0.1),
+                                  foregroundColor: Colors.red,
+                                ),
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                            ],
                           ],
                         ),
                       ),
 
                       const SizedBox(height: 20),
 
-                      // 2. APPEARANCE SECTION
-                      _buildSettingsCard(
-                        context,
+                      // 3. Appearance Card
+                      SettingsCard(
                         title: "Appearance",
                         subtitle: "Choose your preferred color theme.",
                         child: Consumer<ThemeProvider>(
@@ -182,9 +191,8 @@ class _SettingsTabState extends State<SettingsTab>
 
                       const SizedBox(height: 20),
 
-                      // 3. DANGER ZONE
-                      _buildSettingsCard(
-                        context,
+                      // 4. Account Actions Card
+                      SettingsCard(
                         title: "Account Actions",
                         subtitle: "Sign out or manage your data.",
                         titleColor: const Color(0xFFEF4444),
@@ -224,55 +232,7 @@ class _SettingsTabState extends State<SettingsTab>
     );
   }
 
-  Widget _buildUserHeader(var user, bool isDark) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: Colors.blueAccent.withOpacity(0.5),
-              width: 2,
-            ),
-          ),
-          child: CircleAvatar(
-            radius: 35,
-            backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.blue[50],
-            backgroundImage: user?.photoURL != null
-                ? NetworkImage(user!.photoURL!)
-                : null,
-            child: user?.photoURL == null
-                ? Icon(
-                    Icons.person,
-                    size: 35,
-                    color: isDark ? const Color(0xFFCDBEFA) : Colors.blue,
-                  )
-                : null,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              user?.displayName ?? "Champion",
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.black,
-              ),
-            ),
-            Text(
-              user?.email ?? "No email linked",
-              style: const TextStyle(color: Colors.grey, fontSize: 14),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
+  // Helper for Theme Icons
   Widget _buildThemeIcon(IconData icon, bool isActive, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
@@ -295,49 +255,80 @@ class _SettingsTabState extends State<SettingsTab>
     );
   }
 
-  Widget _buildSettingsCard(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required Widget child,
-    Color? titleColor,
-  }) {
-    final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withOpacity(0.05)
-                : Colors.white.withOpacity(0.7),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+  // Delete Dialog Logic
+  void _confirmDelete(BuildContext context, Habit habit) {
+    final isDark = Provider.of<ThemeProvider>(
+      context,
+      listen: false,
+    ).isDarkMode;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+        title: const Text("Delete Habit?"),
+        content: Text("Are you sure you want to delete '${habit.title}'?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("CANCEL", style: TextStyle(color: Colors.grey)),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: titleColor ?? (isDark ? Colors.white : Colors.black),
-                ),
-              ),
-              Text(
-                subtitle,
-                style: const TextStyle(color: Colors.grey, fontSize: 13),
-              ),
-              const SizedBox(height: 20),
-              child,
-            ],
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await Provider.of<HabitProvider>(
+                context,
+                listen: false,
+              ).deleteHabit(habit.id);
+            },
+            child: const Text(
+              "DELETE",
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
           ),
-        ),
+        ],
       ),
+    );
+  }
+
+  // Background Animation
+  Widget _buildAnimatedBackground(bool isDark) {
+    return AnimatedBuilder(
+      animation: _bgController,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            Container(color: Theme.of(context).scaffoldBackgroundColor),
+            ...List.generate(5, (index) {
+              double leftPadding =
+                  (MediaQuery.of(context).size.width / 5) * index;
+              return Positioned(
+                left: leftPadding + 20,
+                top:
+                    -200 +
+                    (MediaQuery.of(context).size.height + 200) *
+                        ((_bgController.value + (index * 0.2)) % 1.0),
+                child: Container(
+                  width: 2,
+                  height: 150,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        isDark
+                            ? Colors.blue.withOpacity(0.1)
+                            : Colors.blue.withOpacity(0.2),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        );
+      },
     );
   }
 }

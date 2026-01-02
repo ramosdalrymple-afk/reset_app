@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:my_auth_project/services/auth_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
+import 'package:my_auth_project/services/habit_provider.dart';
+import 'package:my_auth_project/models/habit_model.dart';
+import 'package:my_auth_project/screens/settings/widget/add_habit_sheet.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -60,40 +63,341 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     final user = AuthService().currentUser;
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
 
-    return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(user?.uid)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasData && snapshot.data!.exists) {
-          final data = snapshot.data!.data() as Map<String, dynamic>;
-          final String habitName = data['habitName'] ?? "Habit";
-          final DateTime startDate = DateTime.parse(
-            data['startDate'] ?? DateTime.now().toIso8601String(),
-          );
+    return Consumer<HabitProvider>(
+      builder: (context, habitProvider, child) {
+        final currentHabit = habitProvider.selectedHabit;
 
+        if (habitProvider.isLoading) {
           return Scaffold(
-            body: Stack(
-              children: [
-                _buildAnimatedBackground(isDark),
-                _buildHomeContent(
-                  habitName,
-                  startDate,
-                  user?.uid,
-                  isDark,
-                  data,
-                ),
-              ],
+            body: Center(
+              child: CircularProgressIndicator(
+                color: isDark ? const Color(0xFFCDBEFA) : Colors.blue,
+              ),
             ),
           );
         }
-        return Center(
-          child: CircularProgressIndicator(
-            color: isDark ? const Color(0xFFCDBEFA) : Colors.blue,
+
+        if (currentHabit == null) {
+          return const Scaffold(
+            body: Center(child: Text("No habit selected. Check Settings.")),
+          );
+        }
+
+        return Scaffold(
+          body: Stack(
+            children: [
+              _buildAnimatedBackground(isDark),
+              _buildHomeContent(
+                context,
+                habitProvider,
+                currentHabit,
+                user,
+                isDark,
+              ),
+            ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildHomeContent(
+    BuildContext context,
+    HabitProvider habitProvider,
+    Habit habit,
+    User? user,
+    bool isDark,
+  ) {
+    final Duration diff = DateTime.now().difference(habit.startDate);
+    final now = DateTime.now();
+    final String dateKey =
+        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+
+    final String? todayStatus = habit.history[dateKey];
+    bool isAlreadyClean = todayStatus == 'clean';
+    bool isStreakTooShort = diff.inSeconds < 30;
+
+    double secPercent = (diff.inSeconds % 60) / 60.0;
+    double minPercent = (diff.inMinutes % 60) / 60.0;
+    double hourPercent = (diff.inHours % 24) / 24.0;
+    double dayPercent = (diff.inDays % 30) / 30.0;
+
+    return SafeArea(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      children: [
+                        const SizedBox(height: 10),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _buildHabitSwitcher(
+                              context,
+                              habitProvider,
+                              habit,
+                              isDark,
+                            ),
+                            _buildUserAvatar(user, isDark),
+                          ],
+                        ),
+                        const SizedBox(height: 25),
+                        _buildHeader(habit.title, isDark),
+                        const SizedBox(height: 30),
+
+                        _buildTimeBar(
+                          "${diff.inDays}",
+                          "days",
+                          const Color(0xFF2DD4BF),
+                          dayPercent,
+                          isDark,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildTimeBar(
+                          "${diff.inHours % 24}",
+                          "hours",
+                          const Color(0xFF3B82F6),
+                          hourPercent,
+                          isDark,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildTimeBar(
+                          "${diff.inMinutes % 60}",
+                          "minutes",
+                          const Color(0xFF6366F1),
+                          minPercent,
+                          isDark,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildTimeBar(
+                          "${diff.inSeconds % 60}",
+                          "seconds",
+                          const Color(0xFF8B5CF6),
+                          secPercent,
+                          isDark,
+                        ),
+                      ],
+                    ),
+
+                    Column(
+                      children: [
+                        const SizedBox(height: 40),
+                        _buildQuoteCard(isDark),
+                        const SizedBox(height: 32),
+                        _buildButtonRow(
+                          isAlreadyClean,
+                          isStreakTooShort,
+                          context,
+                          habit,
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildUserAvatar(User? user, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withOpacity(0.15)
+              : Colors.black.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: CircleAvatar(
+        radius: 18,
+        backgroundColor: isDark
+            ? Colors.white.withOpacity(0.1)
+            : Colors.grey[200],
+        backgroundImage: user?.photoURL != null
+            ? NetworkImage(user!.photoURL!)
+            : null,
+        child: user?.photoURL == null
+            ? Icon(
+                Icons.person,
+                size: 20,
+                color: isDark ? Colors.white70 : Colors.black54,
+              )
+            : null,
+      ),
+    );
+  }
+
+  Widget _buildHabitSwitcher(
+    BuildContext context,
+    HabitProvider provider,
+    Habit currentHabit,
+    bool isDark,
+  ) {
+    return GestureDetector(
+      onTap: () => _showHabitSelectorSheet(context, provider, isDark),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withOpacity(0.08)
+                  : Colors.black.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: isDark ? Colors.white12 : Colors.black12,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF2DD4BF),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  currentHabit.title,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark
+                        ? Colors.white.withOpacity(0.9)
+                        : Colors.black87,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 16,
+                  color: isDark ? Colors.white54 : Colors.black45,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showHabitSelectorSheet(
+    BuildContext context,
+    HabitProvider provider,
+    bool isDark,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF0F172A) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Switch Habit",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ...provider.habits.map((h) {
+                final isSelected = h.id == provider.selectedHabit?.id;
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? Colors.blueAccent
+                          : (isDark ? Colors.white10 : Colors.grey[200]),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.star,
+                      size: 20,
+                      color: isSelected
+                          ? Colors.white
+                          : (isDark ? Colors.grey : Colors.grey[700]),
+                    ),
+                  ),
+                  title: Text(
+                    h.title,
+                    style: TextStyle(
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      color: isSelected
+                          ? Colors.blueAccent
+                          : (isDark ? Colors.white : Colors.black),
+                    ),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check, color: Colors.blueAccent)
+                      : null,
+                  onTap: () {
+                    provider.selectHabit(h);
+                    Navigator.pop(ctx);
+                  },
+                );
+              }),
+              const Divider(height: 30),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => const AddHabitSheet(),
+                    );
+                  },
+                  icon: const Icon(Icons.add_circle_outline),
+                  label: const Text("Create New Habit"),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    foregroundColor: isDark ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -135,78 +439,6 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
           ],
         );
       },
-    );
-  }
-
-  Widget _buildHomeContent(
-    String habitName,
-    DateTime startDate,
-    String? uid,
-    bool isDark,
-    Map<String, dynamic> data,
-  ) {
-    final Duration diff = DateTime.now().difference(startDate);
-    final now = DateTime.now();
-    final String dateKey =
-        "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-    final String? todayStatus = data['history']?[dateKey];
-
-    bool isAlreadyClean = todayStatus == 'clean';
-    bool isStreakTooShort = diff.inSeconds < 30;
-
-    double secPercent = (diff.inSeconds % 60) / 60.0;
-    double minPercent = (diff.inMinutes % 60) / 60.0;
-    double hourPercent = (diff.inHours % 24) / 24.0;
-    double dayPercent = (diff.inDays % 30) / 30.0;
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24.0),
-        child: Column(
-          children: [
-            const SizedBox(height: 40),
-            _buildHeader(habitName, isDark),
-            const SizedBox(height: 30),
-            _buildTimeBar(
-              "${diff.inDays}",
-              "days",
-              const Color(0xFF2DD4BF),
-              dayPercent,
-              isDark,
-            ),
-            const SizedBox(height: 12),
-            _buildTimeBar(
-              "${diff.inHours % 24}",
-              "hours",
-              const Color(0xFF3B82F6),
-              hourPercent,
-              isDark,
-            ),
-            const SizedBox(height: 12),
-            _buildTimeBar(
-              "${diff.inMinutes % 60}",
-              "minutes",
-              const Color(0xFF6366F1),
-              minPercent,
-              isDark,
-            ),
-            const SizedBox(height: 12),
-            _buildTimeBar(
-              "${diff.inSeconds % 60}",
-              "seconds",
-              const Color(0xFF8B5CF6),
-              secPercent,
-              isDark,
-            ),
-            const Spacer(),
-            // --- UPDATED QUOTE SECTION ---
-            _buildQuoteCard(isDark),
-            const SizedBox(height: 32),
-            _buildButtonRow(isAlreadyClean, isStreakTooShort, context, uid),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
     );
   }
 
@@ -332,7 +564,6 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     );
   }
 
-  // HIGHLIGHTED QUOTE CARD
   Widget _buildQuoteCard(bool isDark) {
     return FadeInUp(
       child: ClipRRect(
@@ -407,7 +638,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     bool isAlreadyClean,
     bool isStreakTooShort,
     BuildContext context,
-    String? uid,
+    Habit habit,
   ) {
     return Row(
       children: [
@@ -422,7 +653,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                 ? null
                 : () {
                     HapticFeedback.mediumImpact();
-                    _confirmClean(context, uid);
+                    _confirmClean(context, habit);
                   },
           ),
         ),
@@ -438,7 +669,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                 ? null
                 : () {
                     HapticFeedback.heavyImpact();
-                    _confirmReset(context, uid);
+                    _confirmReset(context, habit);
                   },
           ),
         ),
@@ -470,8 +701,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     );
   }
 
-  void _confirmClean(BuildContext context, String? uid) {
-    if (uid == null) return;
+  void _confirmClean(BuildContext context, Habit habit) {
     final isDark = Provider.of<ThemeProvider>(
       context,
       listen: false,
@@ -498,13 +728,11 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
             TextButton(
               onPressed: () async {
                 Navigator.pop(confirmContext);
-                final now = DateTime.now().toLocal();
-                final String dateKey =
-                    "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-                await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(uid)
-                    .update({'history.$dateKey': 'clean'});
+                // --- CALLING PROVIDER LOGIC ---
+                await Provider.of<HabitProvider>(
+                  context,
+                  listen: false,
+                ).markDayClean(habit.id);
               },
               child: const Text(
                 "YES, I'M CLEAN",
@@ -517,8 +745,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     );
   }
 
-  void _confirmReset(BuildContext context, String? uid) {
-    if (uid == null) return;
+  void _confirmReset(BuildContext context, Habit habit) {
     final isDark = Provider.of<ThemeProvider>(
       context,
       listen: false,
@@ -544,17 +771,11 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
             TextButton(
               onPressed: () async {
                 Navigator.pop(confirmContext);
-                final now = DateTime.now().toLocal();
-                final String dateKey =
-                    "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-                await FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(uid)
-                    .update({
-                      'startDate': now.toIso8601String(),
-                      'totalRelapses': FieldValue.increment(1),
-                      'history.$dateKey': 'relapsed',
-                    });
+                // --- CALLING PROVIDER LOGIC ---
+                await Provider.of<HabitProvider>(
+                  context,
+                  listen: false,
+                ).resetHabit(habit.id);
               },
               child: const Text(
                 "START FRESH",

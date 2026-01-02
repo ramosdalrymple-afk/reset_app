@@ -1,8 +1,9 @@
-// main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+// Import your providers
 import 'package:my_auth_project/services/theme_provider.dart';
+import 'package:my_auth_project/services/habit_provider.dart'; // NEW IMPORT
 import 'package:my_auth_project/screens/auth/auth_wrapper.dart';
 import 'firebase_options.dart';
 
@@ -17,8 +18,12 @@ void main() async {
   }
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
+    // UPDATED: Changed to MultiProvider to handle both Theme and Habits
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => HabitProvider()), // NEW PROVIDER
+      ],
       child: const MyApp(),
     ),
   );

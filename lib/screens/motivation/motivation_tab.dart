@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:my_auth_project/services/auth_service.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
+import 'package:my_auth_project/services/habit_provider.dart'; // NEW IMPORT
+import 'package:my_auth_project/models/habit_model.dart'; // NEW IMPORT
 import 'emergency_screen.dart';
 
 class MotivationTab extends StatefulWidget {
@@ -32,7 +34,6 @@ class _MotivationTabState extends State<MotivationTab>
     super.dispose();
   }
 
-  // Animated Starfield Background
   Widget _buildAnimatedBackground(bool isDark) {
     return AnimatedBuilder(
       animation: _bgController,
@@ -78,35 +79,25 @@ class _MotivationTabState extends State<MotivationTab>
     final user = AuthService().currentUser;
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          _buildAnimatedBackground(isDark),
-          StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(user?.uid)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
+    // 1. REPLACED StreamBuilder with Consumer
+    return Consumer<HabitProvider>(
+      builder: (context, habitProvider, child) {
+        final currentHabit = habitProvider.selectedHabit;
 
-              final data = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+        if (currentHabit == null) {
+          return const Center(child: Text("No habit selected"));
+        }
 
-              // Safe Data Logic: Prevents crashes if Firestore has old String data
-              final String rootWhy =
-                  data['motivation'] ?? "To build a better version of myself.";
-              final rawGains = data['gains'];
-              final List<dynamic> gains = (rawGains is List)
-                  ? rawGains
-                  : ["Energy", "Mental clarity", "Self-respect"];
-              final rawLosses = data['losses'];
-              final List<dynamic> losses = (rawLosses is List)
-                  ? rawLosses
-                  : ["Time", "Peace of mind"];
+        // 2. READ DATA FROM MODEL
+        final String rootWhy = currentHabit.motivation;
+        final List<dynamic> gains = currentHabit.gains;
+        final List<dynamic> losses = currentHabit.losses;
 
-              return SafeArea(
+        return Scaffold(
+          body: Stack(
+            children: [
+              _buildAnimatedBackground(isDark),
+              SafeArea(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24.0,
@@ -148,6 +139,7 @@ class _MotivationTabState extends State<MotivationTab>
                       _buildListSection(
                         context,
                         user?.uid,
+                        currentHabit.id, // PASS HABIT ID
                         "What I gain",
                         "gains",
                         gains,
@@ -159,6 +151,7 @@ class _MotivationTabState extends State<MotivationTab>
                       _buildListSection(
                         context,
                         user?.uid,
+                        currentHabit.id, // PASS HABIT ID
                         "What I lose",
                         "losses",
                         losses,
@@ -169,17 +162,19 @@ class _MotivationTabState extends State<MotivationTab>
                     ],
                   ),
                 ),
-              );
-            },
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
+  // UPDATED: Now accepts habitId
   Widget _buildListSection(
     BuildContext context,
     String? uid,
+    String habitId,
     String title,
     String dbKey,
     List<dynamic> items,
@@ -199,7 +194,9 @@ class _MotivationTabState extends State<MotivationTab>
                 color: accentColor,
                 size: 24,
               ),
-              onPressed: () => _showAddSheet(context, uid, title, dbKey),
+              // Pass habitId to the sheet
+              onPressed: () =>
+                  _showAddSheet(context, uid, habitId, title, dbKey),
             ),
           ],
         ),
@@ -251,7 +248,9 @@ class _MotivationTabState extends State<MotivationTab>
                           size: 18,
                           color: Colors.grey,
                         ),
-                        onPressed: () => _deleteItem(uid, dbKey, item),
+                        // Pass habitId to delete
+                        onPressed: () =>
+                            _deleteItem(context, uid, habitId, dbKey, item),
                       ),
                     ],
                   ),
@@ -264,10 +263,11 @@ class _MotivationTabState extends State<MotivationTab>
     );
   }
 
-  // --- INTEGRATED: INSTANT-CLOSING BOTTOM SHEET ---
+  // UPDATED: Writes to SUBCOLLECTION
   void _showAddSheet(
     BuildContext context,
     String? uid,
+    String habitId,
     String title,
     String key,
   ) {
@@ -333,21 +333,30 @@ class _MotivationTabState extends State<MotivationTab>
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       final text = controller.text.trim();
                       if (text.isEmpty) return;
 
-                      // 1. POP INSTANTLY: This removes the sheet immediately
                       Navigator.of(sheetContext).pop();
 
-                      // 2. BACKGROUND SYNC: Update Firebase without making the UI wait
-                      FirebaseFirestore.instance
+                      // 1. Update Firestore Subcollection
+                      await FirebaseFirestore.instance
                           .collection('users')
                           .doc(uid)
+                          .collection('habits') // Subcollection
+                          .doc(habitId) // Specific Habit
                           .update({
                             key: FieldValue.arrayUnion([text]),
                           })
                           .catchError((e) => debugPrint("Sync error: $e"));
+
+                      // 2. Refresh Provider
+                      if (context.mounted) {
+                        Provider.of<HabitProvider>(
+                          context,
+                          listen: false,
+                        ).fetchHabits();
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blueAccent,
@@ -371,10 +380,27 @@ class _MotivationTabState extends State<MotivationTab>
     );
   }
 
-  void _deleteItem(String? uid, String key, dynamic item) async {
-    await FirebaseFirestore.instance.collection('users').doc(uid).update({
-      key: FieldValue.arrayRemove([item]),
-    });
+  // UPDATED: Writes to SUBCOLLECTION
+  void _deleteItem(
+    BuildContext context,
+    String? uid,
+    String habitId,
+    String key,
+    dynamic item,
+  ) async {
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('habits')
+        .doc(habitId)
+        .update({
+          key: FieldValue.arrayRemove([item]),
+        });
+
+    // Refresh Provider to show change immediately
+    if (context.mounted) {
+      Provider.of<HabitProvider>(context, listen: false).fetchHabits();
+    }
   }
 
   Widget _buildSectionHeader(String title, IconData icon) => Padding(

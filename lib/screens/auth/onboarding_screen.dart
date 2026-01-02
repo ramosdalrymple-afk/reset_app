@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart'; // NEW IMPORT
 import 'package:firebase_auth/firebase_auth.dart';
+// Import your Provider and Widgets
+import '../../services/habit_provider.dart';
 import './widgets/habit_step.dart';
 import './widgets/date_step.dart';
 import './widgets/motivation_step.dart';
@@ -14,49 +16,56 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
+
+  // Controllers to capture user input
   final TextEditingController _habitController = TextEditingController();
   final TextEditingController _motivationController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
+
   int _currentPage = 0;
   bool _isSaving = false;
 
-  Future<void> _pickDate() async {
-    DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now(),
-    );
-    if (picked != null) setState(() => _selectedDate = picked);
+  @override
+  void dispose() {
+    _pageController.dispose();
+    _habitController.dispose();
+    _motivationController.dispose();
+    super.dispose();
   }
 
+  // UPDATED: Logic to use HabitProvider
   void _finishOnboarding() async {
+    // 1. Validation
     if (_habitController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Please select or enter what you're quitting"),
+          backgroundColor: Colors.redAccent,
         ),
       );
       return;
     }
 
     setState(() => _isSaving = true);
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      try {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'hasCompletedOnboarding': true,
-          'habitName': _habitController.text.trim(),
-          'motivation': _motivationController.text.trim(),
-          'startDate': _selectedDate.toIso8601String(),
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      } catch (e) {
-        setState(() => _isSaving = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Error: $e")));
-      }
+
+    try {
+      // 2. Use the Provider to add the habit to the subcollection
+      // This will automatically create the document at users/{uid}/habits/{new_id}
+      await Provider.of<HabitProvider>(context, listen: false).addHabit(
+        _habitController.text.trim(),
+        _selectedDate,
+        _motivationController.text.trim(),
+      );
+
+      // 3. Success!
+      // We don't need to manually navigate.
+      // The AuthWrapper is listening to the HabitProvider.
+      // Once the habit is added, AuthWrapper sees (habits.isNotEmpty) and switches to Navbar automatically.
+    } catch (e) {
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error creating habit: $e")));
     }
   }
 
@@ -74,7 +83,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // Progress Indicator
+              // --- Progress Indicator ---
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 40,
@@ -99,11 +108,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
               ),
+
+              // --- Main Step Content ---
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 40.0),
                   child: PageView(
                     controller: _pageController,
+                    physics:
+                        const NeverScrollableScrollPhysics(), // Disable swipe to force button use
                     onPageChanged: (int page) =>
                         setState(() => _currentPage = page),
                     children: [
@@ -121,6 +134,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
               ),
+
+              // --- Footer Buttons ---
               _buildFooter(),
             ],
           ),
@@ -135,6 +150,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // BACK BUTTON
           if (_currentPage > 0)
             TextButton(
               onPressed: () => _pageController.previousPage(
@@ -147,7 +163,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             )
           else
-            const SizedBox(width: 60),
+            const SizedBox(width: 60), // Spacer to keep layout balanced
+          // NEXT / RESET BUTTON
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
@@ -173,7 +190,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : Text(
-                    _currentPage == 2 ? "RESET NOW" : "NEXT",
+                    _currentPage == 2 ? "START JOURNEY" : "NEXT",
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
           ),

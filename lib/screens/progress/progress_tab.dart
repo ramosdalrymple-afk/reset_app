@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:my_auth_project/services/auth_service.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
+import 'package:my_auth_project/services/habit_provider.dart'; // NEW IMPORT
+import 'package:my_auth_project/models/habit_model.dart'; // NEW IMPORT
 
 class ProgressTab extends StatefulWidget {
   const ProgressTab({super.key});
@@ -18,23 +18,15 @@ class _ProgressTabState extends State<ProgressTab>
     with SingleTickerProviderStateMixin {
   DateTime _focusedDay = DateTime.now();
   Timer? _ticker;
-  late Stream<DocumentSnapshot> _userStream;
   late AnimationController _bgController;
 
   @override
   void initState() {
     super.initState();
-    final user = AuthService().currentUser;
-    _userStream = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user?.uid)
-        .snapshots();
-
     _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) setState(() {});
     });
 
-    // Background animation: slow breathing/drifting cycle
     _bgController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 20),
@@ -56,7 +48,6 @@ class _ProgressTabState extends State<ProgressTab>
     return "${diff.inMinutes}m ${diff.inSeconds % 60}s";
   }
 
-  // NEW: Floating Orb Mesh Background
   Widget _buildAnimatedBackground(bool isDark) {
     return AnimatedBuilder(
       animation: _bgController,
@@ -64,7 +55,6 @@ class _ProgressTabState extends State<ProgressTab>
         return Stack(
           children: [
             Container(color: Theme.of(context).scaffoldBackgroundColor),
-            // Orb 1: Top Right drifting left
             Positioned(
               top: -100 + (100 * _bgController.value),
               right: -50 + (50 * _bgController.value),
@@ -73,7 +63,6 @@ class _ProgressTabState extends State<ProgressTab>
                 Colors.blue.withOpacity(isDark ? 0.08 : 0.12),
               ),
             ),
-            // Orb 2: Bottom Left drifting right
             Positioned(
               bottom: -50 + (80 * (1 - _bgController.value)),
               left: -100 + (100 * _bgController.value),
@@ -82,7 +71,6 @@ class _ProgressTabState extends State<ProgressTab>
                 Colors.teal.withOpacity(isDark ? 0.05 : 0.1),
               ),
             ),
-            // Orb 3: Middle drifting slightly
             Positioned(
               top: 200 + (50 * _bgController.value),
               left: 150 - (30 * _bgController.value),
@@ -112,41 +100,33 @@ class _ProgressTabState extends State<ProgressTab>
   Widget build(BuildContext context) {
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          _buildAnimatedBackground(isDark),
-          StreamBuilder<DocumentSnapshot>(
-            stream: _userStream,
-            builder: (context, snapshot) {
-              if (!snapshot.hasData &&
-                  snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (!snapshot.hasData || !snapshot.data!.exists)
-                return const Center(child: Text("No data found."));
+    // 1. REPLACED StreamBuilder with Consumer<HabitProvider>
+    return Consumer<HabitProvider>(
+      builder: (context, habitProvider, child) {
+        final currentHabit = habitProvider.selectedHabit;
 
-              final data = snapshot.data!.data() as Map<String, dynamic>;
-              DateTime startDate = DateTime.parse(
-                data['startDate'] ?? DateTime.now().toIso8601String(),
-              );
-              final Duration diff = DateTime.now().difference(startDate);
+        // Handle Empty/Loading State
+        if (habitProvider.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (currentHabit == null) {
+          return const Center(child: Text("No habit selected."));
+        }
 
-              int currentDays = diff.inDays;
-              int storedLongest = data['longestStreak'] ?? 0;
+        // 2. USE DATA FROM HABIT MODEL
+        final DateTime startDate = currentHabit.startDate;
+        final Duration diff = DateTime.now().difference(startDate);
 
-              if (currentDays > storedLongest) {
-                FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(snapshot.data!.id)
-                    .update({'longestStreak': currentDays});
-                storedLongest = currentDays;
-              }
+        // Use data directly from the model (Provider fetches it)
+        final int storedLongest = currentHabit.longestStreak;
+        final int totalRelapses = currentHabit.totalRelapses;
+        final Map<String, dynamic> history = currentHabit.history;
 
-              final int totalRelapses = data['totalRelapses'] ?? 0;
-              final Map<String, dynamic> history = data['history'] ?? {};
-
-              return SafeArea(
+        return Scaffold(
+          body: Stack(
+            children: [
+              _buildAnimatedBackground(isDark),
+              SafeArea(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
@@ -163,6 +143,13 @@ class _ProgressTabState extends State<ProgressTab>
                           fontWeight: FontWeight.bold,
                           color: isDark ? Colors.white : Colors.black,
                           letterSpacing: -1,
+                        ),
+                      ),
+                      Text(
+                        currentHabit.title, // Display Habit Name
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: isDark ? Colors.white54 : Colors.black54,
                         ),
                       ),
                       const SizedBox(height: 32),
@@ -197,14 +184,15 @@ class _ProgressTabState extends State<ProgressTab>
                     ],
                   ),
                 ),
-              );
-            },
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
+  // ... (Keep _buildStatBox unchanged) ...
   Widget _buildStatBox(
     String label,
     String value,
@@ -288,6 +276,14 @@ class _ProgressTabState extends State<ProgressTab>
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
+                  leftChevronIcon: Icon(
+                    Icons.chevron_left,
+                    color: isDark ? Colors.white : Colors.black54,
+                  ),
+                  rightChevronIcon: Icon(
+                    Icons.chevron_right,
+                    color: isDark ? Colors.white : Colors.black54,
+                  ),
                 ),
                 calendarStyle: CalendarStyle(
                   defaultTextStyle: TextStyle(
@@ -323,6 +319,7 @@ class _ProgressTabState extends State<ProgressTab>
     );
   }
 
+  // ... (Keep _buildCalendarDay, _buildLegend, _legendItem unchanged) ...
   Widget _buildCalendarDay(DateTime day, Color color, bool isDark) {
     return Container(
       margin: const EdgeInsets.all(6),
