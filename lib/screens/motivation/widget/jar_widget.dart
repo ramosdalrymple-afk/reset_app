@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:my_auth_project/services/auth_service.dart';
 import 'package:my_auth_project/services/wisdom_service.dart';
+import 'dart:ui'; // For blur effect
 
 class JarOfWisdom extends StatefulWidget {
   const JarOfWisdom({super.key});
@@ -14,46 +16,170 @@ class JarOfWisdom extends StatefulWidget {
 class _JarOfWisdomState extends State<JarOfWisdom>
     with TickerProviderStateMixin {
   final WisdomService _service = WisdomService();
-  WisdomItem? _currentWisdom;
   bool _isShaking = false;
-  bool _isSaved = false;
 
   void _handleTap() async {
     if (_isShaking) return;
 
-    setState(() {
-      _isShaking = true;
-      _currentWisdom = null;
-      _isSaved = false;
-    });
+    setState(() => _isShaking = true);
 
-    final minDelay = Future.delayed(const Duration(milliseconds: 1200));
+    // 1. Wait for animation & data
+    final minDelay = Future.delayed(const Duration(milliseconds: 1500));
     final dataFetch = _service.shakeTheJar();
 
     final result = await Future.wait([dataFetch, minDelay]);
+    final wisdom = result[0] as WisdomItem;
 
     if (mounted) {
-      setState(() {
-        _currentWisdom = result[0] as WisdomItem;
-        _isShaking = false;
-      });
+      setState(() => _isShaking = false);
+      // 2. Show the Modal
+      _showWisdomDialog(wisdom);
     }
   }
 
-  // New: Function to close/dismiss the quote
-  void _closeQuote() {
-    setState(() {
-      _currentWisdom = null;
-      _isSaved = false;
-    });
+  void _showWisdomDialog(WisdomItem item) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "Close",
+      barrierColor: Colors.black.withOpacity(0.6), // Darken background
+      transitionDuration: const Duration(milliseconds: 400),
+      pageBuilder: (context, anim1, anim2) {
+        return Center(child: WisdomPopupCard(item: item));
+      },
+      transitionBuilder: (context, anim1, anim2, child) {
+        // Pop-up animation: Scale + Fade
+        return Transform.scale(
+          scale: CurvedAnimation(
+            parent: anim1,
+            curve: Curves.easeOutBack,
+          ).value,
+          child: Opacity(opacity: anim1.value, child: child),
+        );
+      },
+    );
   }
 
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(onTap: _handleTap, child: _buildJarVisual()),
+        const SizedBox(height: 16),
+        if (_isShaking)
+          Text(
+            "Consulting the archives...",
+            style: TextStyle(
+              color: Colors.blueAccent.withOpacity(0.8),
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+            ),
+          ).animate(onPlay: (c) => c.repeat()).fade()
+        else
+          Text(
+            "Tap to reveal wisdom",
+            style: TextStyle(
+              color: Colors.grey.withOpacity(0.6),
+              fontSize: 12,
+              letterSpacing: 1.0,
+            ),
+          ).animate().fade().slideY(begin: 0.2, end: 0),
+      ],
+    );
+  }
+
+  Widget _buildJarVisual() {
+    // Glassmorphic Jar
+    Widget jar = Container(
+      width: 120,
+      height: 140,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(60),
+        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withOpacity(0.1),
+            blurRadius: 20,
+            spreadRadius: 5,
+          ),
+        ],
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // "Liquid" or "Tablets" inside
+          Positioned(
+            bottom: 10,
+            child: Container(
+              width: 80,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.amber.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.amber.withOpacity(0.2),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Icon(
+            PhosphorIcons.scroll(), // FIXED: Added ()
+            size: 50,
+            color: Colors.white.withOpacity(0.8),
+          ),
+        ],
+      ),
+    );
+
+    if (_isShaking) {
+      return jar
+          .animate(onPlay: (controller) => controller.repeat())
+          .shake(
+            hz: 8,
+            rotation: 0.08,
+            curve: Curves.easeInOut,
+          ); // Slower, heavier shake
+    }
+    return jar;
+  }
+}
+
+// --- NEW SEPARATE WIDGET FOR THE POPUP CARD ---
+class WisdomPopupCard extends StatefulWidget {
+  final WisdomItem item;
+  const WisdomPopupCard({super.key, required this.item});
+
+  @override
+  State<WisdomPopupCard> createState() => _WisdomPopupCardState();
+}
+
+class _WisdomPopupCardState extends State<WisdomPopupCard> {
+  bool _isSaved = false;
+
   void _saveToFavorites() async {
-    if (_currentWisdom == null || _isSaved) return;
+    // 1. If already saved, just alert the user and return
+    if (_isSaved) {
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text("Already saved to your Wisdom Room"),
+          backgroundColor: Colors.grey[700],
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 1),
+        ),
+      );
+      return;
+    }
 
     final user = AuthService().currentUser;
     if (user == null) return;
 
+    // 2. Optimistic UI update (turn heart red immediately)
     setState(() => _isSaved = true);
 
     try {
@@ -62,214 +188,140 @@ class _JarOfWisdomState extends State<JarOfWisdom>
           .doc(user.uid)
           .collection('saved_wisdom')
           .add({
-            'text': _currentWisdom!.text,
-            'source': _currentWisdom!.source,
-            'type': _currentWisdom!.type,
+            'text': widget.item.text,
+            'source': widget.item.source,
+            'type': widget.item.type,
             'savedAt': FieldValue.serverTimestamp(),
           });
 
+      // 3. Show Success Alert
       if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text("Saved to your Wisdom Room"),
-            backgroundColor: Colors.teal,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+            content: Row(
+              children: [
+                Icon(
+                  PhosphorIcons.checkCircle(PhosphorIconsStyle.fill),
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 10),
+                const Text("Saved to Wisdom Room"),
+              ],
             ),
-            duration: const Duration(seconds: 1),
+            backgroundColor: Colors.teal, // Sober/Calming Green
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
     } catch (e) {
+      // Revert if error
       if (mounted) setState(() => _isSaved = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 1. THE JAR
-        GestureDetector(onTap: _handleTap, child: _buildJarVisual()),
-
-        const SizedBox(height: 12),
-
-        // 2. INSTRUCTION TEXT
-        if (_currentWisdom == null && !_isShaking)
-          Text(
-                "Tap the Jar for Wisdom",
-                style: TextStyle(
-                  color: Colors.grey.withOpacity(0.6),
-                  fontSize: 12,
-                  letterSpacing: 1.0,
-                ),
-              )
-              .animate()
-              .fade(duration: 600.ms)
-              .slideY(begin: 0.2, end: 0, curve: Curves.easeOut),
-
-        if (_isShaking)
-          const Text(
-            "Mixing wisdom...",
-            style: TextStyle(color: Colors.orangeAccent, fontSize: 12),
-          ).animate(onPlay: (c) => c.repeat()).fade(),
-
-        // 3. THE PAPER SLIP (With Close Button)
-        AnimatedSize(
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOutBack,
-          child: _currentWisdom == null
-              ? const SizedBox.shrink()
-              : Padding(
-                  padding: const EdgeInsets.only(top: 16.0),
-                  child: _buildPaperSlip(_currentWisdom!),
-                ),
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.85,
+        constraints: const BoxConstraints(maxWidth: 400),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFFBEB), // Warm paper color
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 25,
+              offset: const Offset(0, 10),
+            ),
+          ],
+          border: Border.all(color: Colors.orange.withOpacity(0.1), width: 2),
         ),
-      ],
-    );
-  }
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Icon Header
+            Icon(PhosphorIcons.quotes(), size: 32, color: Colors.amber[800]),
+            const SizedBox(height: 20),
 
-  Widget _buildJarVisual() {
-    Widget jar = Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.brown.withOpacity(0.1),
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.brown.withOpacity(0.3), width: 2),
-      ),
-      child: const Icon(Icons.cookie, size: 60, color: Colors.brown),
-    );
+            // Quote Text
+            Text(
+              widget.item.text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 20,
+                height: 1.4,
+                fontFamily: 'Georgia',
+                color: Color(0xFF2D2D2D),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 24),
 
-    if (_isShaking) {
-      return jar
-          .animate(onPlay: (controller) => controller.repeat())
-          .shake(hz: 12, rotation: 0.1, curve: Curves.easeInOut);
-    }
-    return jar;
-  }
+            Divider(color: Colors.brown.withOpacity(0.1), thickness: 1),
+            const SizedBox(height: 16),
 
-  Widget _buildPaperSlip(WisdomItem item) {
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(maxWidth: 340),
-      // NOTE: Removed generic padding here to allow Stack positioning
-      decoration: BoxDecoration(
-        color: const Color(0xFFFDF6E3),
-        borderRadius: BorderRadius.circular(2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(color: Colors.grey.withOpacity(0.3)),
-      ),
-      child: Stack(
-        children: [
-          // A. THE CONTENT
-          Padding(
-            // Top padding increased to 35 to avoid overlapping with the 'X' button
-            padding: const EdgeInsets.fromLTRB(20, 35, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            // Author & Actions
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Quote
-                Text(
-                  '"${item.text}"',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    height: 1.4,
-                    fontFamily: 'Times New Roman',
-                    fontStyle: FontStyle.italic,
-                    color: Colors.black87,
+                Expanded(
+                  child: Text(
+                    "― ${widget.item.source}",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.brown[400],
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 16),
 
-                const Divider(height: 1, thickness: 0.5, color: Colors.black12),
-                const SizedBox(height: 12),
-
-                // Footer
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: Text(
-                        "- ${item.source}",
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black54,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    // Save Button
+                    IconButton(
+                      onPressed: _saveToFavorites,
+                      icon: Icon(
+                        _isSaved
+                            ? PhosphorIcons.heart(PhosphorIconsStyle.fill)
+                            : PhosphorIcons.heart(),
+                        color: _isSaved ? Colors.redAccent : Colors.brown[300],
                       ),
+                      tooltip: "Save to Archive",
                     ),
-                    InkWell(
-                      onTap: _saveToFavorites,
-                      borderRadius: BorderRadius.circular(20),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _isSaved
-                              ? Colors.red.withOpacity(0.1)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: _isSaved
-                                ? Colors.red.withOpacity(0.5)
-                                : Colors.grey.withOpacity(0.3),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              _isSaved ? Icons.favorite : Icons.favorite_border,
-                              size: 16,
-                              color: _isSaved ? Colors.red : Colors.grey,
-                            ),
-                            if (_isSaved) ...[
-                              const SizedBox(width: 4),
-                              const Text(
-                                "Saved",
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.red,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
+                    // Close Button
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: Icon(
+                        PhosphorIcons.xCircle(),
+                        color: Colors.grey[400],
                       ),
                     ),
                   ],
                 ),
               ],
             ),
-          ),
 
-          // B. THE CLOSE BUTTON (Top Right)
-          Positioned(
-            top: 0,
-            right: 0,
-            child: IconButton(
-              icon: const Icon(Icons.close, size: 20, color: Colors.black45),
-              onPressed: _closeQuote,
-              splashRadius: 20,
-              tooltip: "Close",
-            ),
-          ),
-        ],
+            // Optional: Small text indicator below icons for extra clarity
+            if (_isSaved)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0),
+                child: Text(
+                  "Saved",
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.redAccent.withOpacity(0.8),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ).animate().fade().slideY(begin: 0.5, end: 0),
+              ),
+          ],
+        ),
       ),
-    ).animate().fade().slideY(begin: 0.2, end: 0);
+    );
   }
 }

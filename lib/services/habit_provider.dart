@@ -13,7 +13,30 @@ class HabitProvider with ChangeNotifier {
   Habit? get selectedHabit => _selectedHabit;
   bool get isLoading => _isLoading;
 
-  // --- NEW: PLEDGE LOGIC ---
+  // --- NEW: AGGREGATE HISTORY (ALL HABITS) ---
+  // This is used by the "All Habits" toggle on the Progress Page.
+  Map<String, dynamic> get combinedHistory {
+    final Map<String, dynamic> combined = {};
+
+    for (final habit in _habits) {
+      habit.history.forEach((dateKey, status) {
+        // If we already have a status for this date...
+        if (combined.containsKey(dateKey)) {
+          // If the NEW status is 'relapse', it overrides 'clean'.
+          // (Because 1 relapse means the day wasn't perfect).
+          if (status == 'relapse') {
+            combined[dateKey] = 'relapse';
+          }
+        } else {
+          // No entry for this date yet, just take the status.
+          combined[dateKey] = status;
+        }
+      });
+    }
+    return combined;
+  }
+
+  // --- PLEDGE LOGIC ---
   bool get isPledgedToday {
     if (_selectedHabit?.lastPledgeDate == null) return false;
 
@@ -56,8 +79,7 @@ class HabitProvider with ChangeNotifier {
     }
   }
 
-  // --- NEW: FETCH PLEDGE HISTORY STREAM ---
-  // This was missing and caused the error
+  // --- FETCH PLEDGE HISTORY STREAM ---
   Stream<QuerySnapshot> getPledgeHistoryStream(String habitId) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return const Stream.empty();
@@ -79,6 +101,7 @@ class HabitProvider with ChangeNotifier {
     if (user == null) return;
 
     _isLoading = true;
+    // notifyListeners(); // Optional: Uncomment if you want loading spinners immediately
 
     try {
       final snapshot = await FirebaseFirestore.instance
@@ -91,6 +114,7 @@ class HabitProvider with ChangeNotifier {
       _habits = snapshot.docs.map((doc) => Habit.fromFirestore(doc)).toList();
 
       if (_habits.isNotEmpty) {
+        // logic to keep the currently selected habit selected if it still exists
         if (_selectedHabit == null ||
             !_habits.any((h) => h.id == _selectedHabit!.id)) {
           _selectedHabit = _habits.first;
