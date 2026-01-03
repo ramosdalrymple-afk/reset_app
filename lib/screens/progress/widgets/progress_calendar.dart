@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart'; // <--- Added Import
 import '../../../services/habit_provider.dart';
 import '../../../models/habit_model.dart';
 
@@ -92,10 +93,11 @@ class _ProgressCalendarState extends State<ProgressCalendar> {
                       ),
                     ),
                     calendarStyle: CalendarStyle(
-                      defaultTextStyle: TextStyle(
+                      // --- FIX: Explicitly apply Inter font here ---
+                      defaultTextStyle: GoogleFonts.inter(
                         color: widget.isDark ? Colors.white70 : Colors.black87,
                       ),
-                      weekendTextStyle: const TextStyle(
+                      weekendTextStyle: GoogleFonts.inter(
                         color: Colors.redAccent,
                       ),
                       outsideDaysVisible: false,
@@ -103,7 +105,7 @@ class _ProgressCalendarState extends State<ProgressCalendar> {
                         color: Colors.blueAccent.withOpacity(0.3),
                         shape: BoxShape.circle,
                       ),
-                      todayTextStyle: const TextStyle(
+                      todayTextStyle: GoogleFonts.inter(
                         color: Colors.blueAccent,
                         fontWeight: FontWeight.bold,
                       ),
@@ -201,7 +203,8 @@ class _ProgressCalendarState extends State<ProgressCalendar> {
       ),
       child: Text(
         '${day.day}',
-        style: TextStyle(
+        style: GoogleFonts.inter(
+          // Apply Inter to marker text as well
           color: widget.isDark ? Colors.white : Colors.black,
           fontWeight: FontWeight.bold,
         ),

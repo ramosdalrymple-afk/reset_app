@@ -4,7 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:my_auth_project/services/auth_service.dart';
 import 'package:my_auth_project/services/wisdom_service.dart';
-import 'dart:ui'; // For blur effect
+import 'dart:math' as math;
+import 'dart:ui';
+import 'package:confetti/confetti.dart';
 
 class JarOfWisdom extends StatefulWidget {
   const JarOfWisdom({super.key});
@@ -42,13 +44,12 @@ class _JarOfWisdomState extends State<JarOfWisdom>
       context: context,
       barrierDismissible: true,
       barrierLabel: "Close",
-      barrierColor: Colors.black.withOpacity(0.6), // Darken background
+      barrierColor: Colors.black.withOpacity(0.6),
       transitionDuration: const Duration(milliseconds: 400),
       pageBuilder: (context, anim1, anim2) {
         return Center(child: WisdomPopupCard(item: item));
       },
       transitionBuilder: (context, anim1, anim2, child) {
-        // Pop-up animation: Scale + Fade
         return Transform.scale(
           scale: CurvedAnimation(
             parent: anim1,
@@ -65,8 +66,11 @@ class _JarOfWisdomState extends State<JarOfWisdom>
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        GestureDetector(onTap: _handleTap, child: _buildJarVisual()),
-        const SizedBox(height: 16),
+        GestureDetector(onTap: _handleTap, child: _buildLivelyJar()),
+
+        // --- CHANGED: Increased height from 16 to 50 for better spacing ---
+        const SizedBox(height: 50),
+
         if (_isShaking)
           Text(
             "Consulting the archives...",
@@ -89,67 +93,131 @@ class _JarOfWisdomState extends State<JarOfWisdom>
     );
   }
 
-  Widget _buildJarVisual() {
-    // Glassmorphic Jar
-    Widget jar = Container(
-      width: 120,
-      height: 140,
+  Widget _buildLivelyJar() {
+    Widget jarBody = Container(
+      width: 140,
+      height: 160,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(60),
-        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withOpacity(0.4),
+            Colors.blue.withOpacity(0.05),
+            Colors.white.withOpacity(0.1),
+          ],
+          stops: const [0.0, 0.4, 1.0],
+        ),
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+          bottomLeft: Radius.circular(40),
+          bottomRight: Radius.circular(40),
+        ),
+        border: Border.all(color: Colors.white.withOpacity(0.5), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.blue.withOpacity(0.1),
-            blurRadius: 20,
+            color: Colors.blueAccent.withOpacity(0.15),
+            blurRadius: 30,
             spreadRadius: 5,
           ),
         ],
       ),
       child: Stack(
-        alignment: Alignment.center,
         children: [
-          // "Liquid" or "Tablets" inside
+          _buildFloatingItem(20, 40, 24, Colors.amberAccent),
+          _buildFloatingItem(80, 60, 30, Colors.orangeAccent),
+          _buildFloatingItem(40, 90, 20, Colors.purpleAccent),
+          _buildFloatingItem(90, 110, 18, Colors.blueAccent),
           Positioned(
-            bottom: 10,
+            top: 20,
+            left: 15,
             child: Container(
-              width: 80,
-              height: 40,
+              width: 10,
+              height: 100,
               decoration: BoxDecoration(
-                color: Colors.amber.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.amber.withOpacity(0.2),
-                    blurRadius: 10,
-                  ),
-                ],
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.white.withOpacity(0.6), Colors.transparent],
+                ),
+                borderRadius: BorderRadius.circular(5),
               ),
             ),
-          ),
-          Icon(
-            PhosphorIcons.scroll(), // FIXED: Added ()
-            size: 50,
-            color: Colors.white.withOpacity(0.8),
           ),
         ],
       ),
     );
 
+    Widget lid = Container(
+      width: 110,
+      height: 20,
+      decoration: BoxDecoration(
+        color: const Color(0xFF8D6E63),
+        borderRadius: BorderRadius.circular(5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        gradient: const LinearGradient(
+          colors: [Color(0xFFA1887F), Color(0xFF6D4C41)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+    );
+
+    Widget fullJar = Stack(
+      alignment: Alignment.topCenter,
+      children: [
+        Padding(padding: const EdgeInsets.only(top: 15.0), child: jarBody),
+        lid,
+      ],
+    );
+
     if (_isShaking) {
-      return jar
+      return fullJar
           .animate(onPlay: (controller) => controller.repeat())
-          .shake(
-            hz: 8,
-            rotation: 0.08,
-            curve: Curves.easeInOut,
-          ); // Slower, heavier shake
+          .shake(hz: 8, rotation: 0.08, curve: Curves.easeInOut);
     }
-    return jar;
+
+    return fullJar
+        .animate(onPlay: (c) => c.repeat(reverse: true))
+        .scaleXY(
+          begin: 1.0,
+          end: 1.02,
+          duration: 2000.ms,
+          curve: Curves.easeInOut,
+        );
+  }
+
+  Widget _buildFloatingItem(double left, double top, double size, Color color) {
+    final delay = math.Random().nextInt(1000);
+    return Positioned(
+      left: left,
+      top: top,
+      child:
+          Icon(
+                PhosphorIcons.scroll(PhosphorIconsStyle.fill),
+                size: size,
+                color: color.withOpacity(0.7),
+              )
+              .animate(onPlay: (c) => c.repeat(reverse: true))
+              .moveY(
+                begin: 0,
+                end: -10,
+                duration: 2000.ms,
+                delay: delay.ms,
+                curve: Curves.easeInOut,
+              ),
+    );
   }
 }
 
-// --- NEW SEPARATE WIDGET FOR THE POPUP CARD ---
+// --- POPUP CARD WITH CONFETTI ---
 class WisdomPopupCard extends StatefulWidget {
   final WisdomItem item;
   const WisdomPopupCard({super.key, required this.item});
@@ -159,28 +227,32 @@ class WisdomPopupCard extends StatefulWidget {
 }
 
 class _WisdomPopupCardState extends State<WisdomPopupCard> {
+  late ConfettiController _confettiController;
   bool _isSaved = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _confettiController = ConfettiController(
+      duration: const Duration(milliseconds: 800),
+    );
+    _confettiController.play();
+  }
+
+  @override
+  void dispose() {
+    _confettiController.dispose();
+    super.dispose();
+  }
+
   void _saveToFavorites() async {
-    // 1. If already saved, just alert the user and return
-    if (_isSaved) {
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text("Already saved to your Wisdom Room"),
-          backgroundColor: Colors.grey[700],
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 1),
-        ),
-      );
-      return;
-    }
+    if (_isSaved) return;
 
     final user = AuthService().currentUser;
     if (user == null) return;
 
-    // 2. Optimistic UI update (turn heart red immediately)
     setState(() => _isSaved = true);
+    _confettiController.play();
 
     try {
       await FirebaseFirestore.instance
@@ -194,7 +266,6 @@ class _WisdomPopupCardState extends State<WisdomPopupCard> {
             'savedAt': FieldValue.serverTimestamp(),
           });
 
-      // 3. Show Success Alert
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -206,122 +277,219 @@ class _WisdomPopupCardState extends State<WisdomPopupCard> {
                   color: Colors.white,
                 ),
                 const SizedBox(width: 10),
-                const Text("Saved to Wisdom Room"),
+                const Text("Saved to Wisdom Vault"),
               ],
             ),
-            backgroundColor: Colors.teal, // Sober/Calming Green
+            backgroundColor: Colors.teal,
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
     } catch (e) {
-      // Revert if error
       if (mounted) setState(() => _isSaved = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        width: MediaQuery.of(context).size.width * 0.85,
-        constraints: const BoxConstraints(maxWidth: 400),
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFFFBEB), // Warm paper color
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 25,
-              offset: const Offset(0, 10),
-            ),
-          ],
-          border: Border.all(color: Colors.orange.withOpacity(0.1), width: 2),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Icon Header
-            Icon(PhosphorIcons.quotes(), size: 32, color: Colors.amber[800]),
-            const SizedBox(height: 20),
-
-            // Quote Text
-            Text(
-              widget.item.text,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 20,
-                height: 1.4,
-                fontFamily: 'Georgia',
-                color: Color(0xFF2D2D2D),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            Divider(color: Colors.brown.withOpacity(0.1), thickness: 1),
-            const SizedBox(height: 16),
-
-            // Author & Actions
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    "― ${widget.item.source}",
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.brown[400],
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-
-                Row(
-                  children: [
-                    // Save Button
-                    IconButton(
-                      onPressed: _saveToFavorites,
-                      icon: Icon(
-                        _isSaved
-                            ? PhosphorIcons.heart(PhosphorIconsStyle.fill)
-                            : PhosphorIcons.heart(),
-                        color: _isSaved ? Colors.redAccent : Colors.brown[300],
-                      ),
-                      tooltip: "Save to Archive",
-                    ),
-                    // Close Button
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: Icon(
-                        PhosphorIcons.xCircle(),
-                        color: Colors.grey[400],
+    return Stack(
+      alignment: Alignment.topCenter,
+      children: [
+        // 1. The Card Itself
+        Material(
+          color: Colors.transparent,
+          child:
+              Container(
+                    width: MediaQuery.of(context).size.width * 0.85,
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.25),
+                          blurRadius: 30,
+                          offset: const Offset(0, 15),
+                        ),
+                      ],
+                      border: Border.all(
+                        color: Colors.orange.withOpacity(0.15),
+                        width: 2,
                       ),
                     ),
-                  ],
-                ),
-              ],
-            ),
-
-            // Optional: Small text indicator below icons for extra clarity
-            if (_isSaved)
-              Padding(
-                padding: const EdgeInsets.only(top: 8.0),
-                child: Text(
-                  "Saved",
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.redAccent.withOpacity(0.8),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ).animate().fade().slideY(begin: 0.5, end: 0),
-              ),
-          ],
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          PhosphorIcons.quotes(),
+                          size: 36,
+                          color: Colors.amber[800],
+                        ).animate().scale(
+                          duration: 600.ms,
+                          curve: Curves.elasticOut,
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                              widget.item.text,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                height: 1.4,
+                                fontFamily: 'Georgia',
+                                color: Color(0xFF2D2D2D),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            )
+                            .animate()
+                            .fade(duration: 800.ms)
+                            .slideY(begin: 0.1, end: 0, curve: Curves.easeOut),
+                        const SizedBox(height: 24),
+                        Divider(
+                              color: Colors.brown.withOpacity(0.1),
+                              thickness: 1,
+                            )
+                            .animate(delay: 200.ms)
+                            .fade()
+                            .scaleX(begin: 0, end: 1, curve: Curves.easeOut),
+                        const SizedBox(height: 16),
+                        Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    "― ${widget.item.source}",
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.brown[400],
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
+                                Row(
+                                  children: [
+                                    IconButton(
+                                      onPressed: _saveToFavorites,
+                                      icon:
+                                          Icon(
+                                                _isSaved
+                                                    ? PhosphorIcons.heart(
+                                                        PhosphorIconsStyle.fill,
+                                                      )
+                                                    : PhosphorIcons.heart(),
+                                                color: _isSaved
+                                                    ? Colors.redAccent
+                                                    : Colors.brown[300],
+                                              )
+                                              .animate(target: _isSaved ? 1 : 0)
+                                              .scale(
+                                                begin: const Offset(1, 1),
+                                                end: const Offset(1.3, 1.3),
+                                                duration: 200.ms,
+                                                curve: Curves.easeInOut,
+                                              )
+                                              .then()
+                                              .scale(
+                                                begin: const Offset(1.3, 1.3),
+                                                end: const Offset(1, 1),
+                                              ),
+                                      tooltip: "Save to Archive",
+                                    ),
+                                    IconButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(),
+                                      icon: Icon(
+                                        PhosphorIcons.xCircle(),
+                                        color: Colors.grey[400],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            )
+                            .animate(delay: 400.ms)
+                            .fade()
+                            .slideY(begin: 0.2, end: 0),
+                        if (_isSaved)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  PhosphorIcons.checkCircle(
+                                    PhosphorIconsStyle.fill,
+                                  ),
+                                  size: 14,
+                                  color: Colors.teal,
+                                ),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  "Saved to Wisdom Vault",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.teal,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ).animate().fade().moveY(begin: 5, end: 0),
+                          ),
+                      ],
+                    ),
+                  )
+                  .animate()
+                  .fade(duration: 400.ms)
+                  .scaleXY(begin: 0.9, end: 1.0, curve: Curves.easeOutBack),
         ),
-      ),
+
+        // 2. Confetti Widget
+        Positioned(
+          top: -30,
+          child: ConfettiWidget(
+            confettiController: _confettiController,
+            blastDirectionality: BlastDirectionality.explosive,
+            shouldLoop: false,
+            colors: const [
+              Colors.green,
+              Colors.blue,
+              Colors.pink,
+              Colors.orange,
+              Colors.purple,
+            ],
+            createParticlePath: drawStar,
+          ),
+        ),
+      ],
     );
+  }
+
+  Path drawStar(Size size) {
+    double degToRad(double deg) => deg * (math.pi / 180.0);
+    const numberOfPoints = 5;
+    final halfWidth = size.width / 2;
+    final externalRadius = halfWidth;
+    final internalRadius = halfWidth / 2.5;
+    final degreesPerStep = 360 / numberOfPoints;
+    final halfDegreesPerStep = degreesPerStep / 2;
+    final path = Path();
+    final fullAngle = degToRad(360);
+    path.moveTo(size.width, halfWidth);
+
+    for (double step = 0; step < fullAngle; step += degToRad(degreesPerStep)) {
+      path.lineTo(
+        halfWidth + externalRadius * math.cos(step),
+        halfWidth + externalRadius * math.sin(step),
+      );
+      path.lineTo(
+        halfWidth +
+            internalRadius * math.cos(step + degToRad(halfDegreesPerStep)),
+        halfWidth +
+            internalRadius * math.sin(step + degToRad(halfDegreesPerStep)),
+      );
+    }
+    path.close();
+    return path;
   }
 }

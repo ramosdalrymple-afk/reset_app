@@ -1,18 +1,22 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:my_auth_project/screens/motivation/widget/consequences_card.dart';
 import 'package:provider/provider.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:my_auth_project/services/auth_service.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
 import 'package:my_auth_project/services/habit_provider.dart';
 import 'package:my_auth_project/models/habit_model.dart';
 import 'emergency_screen.dart';
 
-// --- CUSTOM WIDGET IMPORTS ---
-import 'package:my_auth_project/screens/motivation/widget/jar_widget.dart';
-import 'wisdom_screen.dart';
+// --- WIDGET IMPORTS ---
+import 'widget/support_button.dart';
+import 'widget/manifesto_card.dart';
+import 'widget/benefits_card.dart';
+import 'widget/gratitude_card.dart';
+import 'widget/consequences_card.dart';
+import 'widget/resource_library.dart';
+import 'widget/wisdom_section.dart';
 
 class MotivationTab extends StatefulWidget {
   const MotivationTab({super.key});
@@ -24,6 +28,7 @@ class MotivationTab extends StatefulWidget {
 class _MotivationTabState extends State<MotivationTab>
     with SingleTickerProviderStateMixin {
   late AnimationController _bgController;
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -112,13 +117,14 @@ class _MotivationTabState extends State<MotivationTab>
         final String rootWhy = currentHabit.motivation;
         final List<dynamic> gains = currentHabit.gains;
         final List<dynamic> losses = currentHabit.losses;
+        // Ensure the model has been updated to include 'gratitude'
+        final List<dynamic> gratitude = currentHabit.gratitude;
 
         return Scaffold(
           extendBodyBehindAppBar: true,
           body: Stack(
             children: [
               _buildAmbientBackground(isDark),
-
               SafeArea(
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
@@ -127,7 +133,6 @@ class _MotivationTabState extends State<MotivationTab>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 20),
-
                       // --- HEADER ---
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,10 +157,7 @@ class _MotivationTabState extends State<MotivationTab>
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 24),
-
-                      // 1. SUPPORT BUTTON
                       SupportButton(
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute(
@@ -163,72 +165,30 @@ class _MotivationTabState extends State<MotivationTab>
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 24),
-
-                      // 2. MANIFESTO CARD
-                      _buildGlassCard(
-                        isDark: isDark,
-                        child: _buildReasonContent(rootWhy, isDark),
-                      ),
-
+                      ManifestoCard(text: rootWhy, isDark: isDark),
                       const SizedBox(height: 32),
 
-                      // 3. WISDOM SECTION
-                      _buildJarSection(context, isDark),
+                      // --- TAB SWITCHER (3 Tabs) ---
+                      _buildTabSwitch(isDark),
+                      const SizedBox(height: 20),
 
-                      const SizedBox(height: 32),
-
-                      // 4. BENEFITS (Gratitude Journal Style)
-                      _buildJournalCardSection(
-                        title: "Benefits of Recovery",
-                        items: gains,
-                        accentColor: const Color(0xFF10B981), // Emerald
-                        icon: PhosphorIcons.plant(),
-                        placeholder: "Add a benefit...",
-                        isDark: isDark,
-                        onAdd: () => _showAddSheet(
-                          context,
-                          user?.uid,
-                          currentHabit.id,
-                          "Benefits",
-                          "gains",
-                        ),
-                        onDelete: (item) => _deleteItem(
-                          context,
-                          user?.uid,
-                          currentHabit.id,
-                          "gains",
-                          item,
+                      // --- CONTENT SWITCHER ---
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        child: KeyedSubtree(
+                          key: ValueKey<int>(_selectedIndex),
+                          child: _buildSelectedContent(
+                            index: _selectedIndex,
+                            isDark: isDark,
+                            gains: gains,
+                            losses: losses,
+                            gratitude: gratitude,
+                            user: user,
+                            currentHabit: currentHabit,
+                          ),
                         ),
                       ),
-
-                      const SizedBox(height: 32),
-
-                      // 5. CONSEQUENCES (Gratitude Journal Style)
-                      _buildJournalCardSection(
-                        title: "Consequences of Use",
-                        items: losses,
-                        accentColor: const Color(0xFFEF4444), // Red
-                        icon: PhosphorIcons.warning(),
-                        placeholder: "Add a consequence...",
-                        isDark: isDark,
-                        onAdd: () => _showAddSheet(
-                          context,
-                          user?.uid,
-                          currentHabit.id,
-                          "Consequences",
-                          "losses",
-                        ),
-                        onDelete: (item) => _deleteItem(
-                          context,
-                          user?.uid,
-                          currentHabit.id,
-                          "losses",
-                          item,
-                        ),
-                      ),
-
                       const SizedBox(height: 100),
                     ],
                   ),
@@ -241,293 +201,156 @@ class _MotivationTabState extends State<MotivationTab>
     );
   }
 
-  // --- NEW: JOURNAL STYLE CARD SECTION ---
-  // This unifies Header, List, and Add Input into one card like the reference image
-  Widget _buildJournalCardSection({
-    required String title,
-    required List<dynamic> items,
-    required Color accentColor,
-    required IconData icon,
-    required String placeholder,
+  // --- CONTENT SELECTOR ---
+  Widget _buildSelectedContent({
+    required int index,
     required bool isDark,
-    required VoidCallback onAdd,
-    required Function(dynamic) onDelete,
+    required List<dynamic> gains,
+    required List<dynamic> losses,
+    required List<dynamic> gratitude,
+    required dynamic user,
+    required Habit currentHabit,
   }) {
-    return _buildGlassCard(
-      isDark: isDark,
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    switch (index) {
+      case 0:
+        return WisdomSection(isDark: isDark);
+      case 1:
+        // --- BENEFITS TAB (Includes Benefits + Gratitude) ---
+        return Column(
           children: [
-            // A. HEADER
-            Row(
-              children: [
-                Icon(icon, color: accentColor, size: 24),
-                const SizedBox(width: 12),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : Colors.black87,
-                    fontFamily:
-                        'Georgia', // Optional: Serif font like reference
-                  ),
-                ),
-              ],
+            // 1. Benefits of Recovery
+            BenefitsCard(
+              items: gains,
+              isDark: isDark,
+              onAdd: () => _showAddSheet(
+                context,
+                user?.uid,
+                currentHabit.id,
+                "Benefits",
+                "gains",
+              ),
+              onDelete: (item) => _deleteItem(
+                context,
+                user?.uid,
+                currentHabit.id,
+                "gains",
+                item,
+              ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
-            // B. LIST ITEMS (Pills)
-            if (items.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20),
-                child: Center(
-                  child: Text(
-                    "Nothing here yet.",
-                    style: TextStyle(
-                      color: isDark ? Colors.white38 : Colors.black38,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-              )
-            else
-              ...items.asMap().entries.map((entry) {
-                final index = entry.key;
-                final item = entry.value;
-                return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Dismissible(
-                        key: ValueKey(item),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 16),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(PhosphorIcons.trash(), color: Colors.red),
-                        ),
-                        onDismissed: (_) => onDelete(item),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? accentColor.withOpacity(0.08)
-                                : accentColor.withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: accentColor.withOpacity(0.1),
-                            ),
-                          ),
-                          child: Text(
-                            item.toString(),
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: isDark
-                                  ? Colors.white.withOpacity(0.9)
-                                  : Colors.black87,
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                    .animate(delay: (50 * index).ms)
-                    .fadeIn()
-                    .slideX(begin: 0.05, end: 0);
-              }),
-
-            const SizedBox(height: 16),
-            Divider(
-              color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
-            ),
-            const SizedBox(height: 12),
-
-            // C. ADD INPUT TRIGGER (Looks like input, acts like button)
-            InkWell(
-              onTap: onAdd,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark ? Colors.white12 : Colors.black12,
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        placeholder,
-                        style: TextStyle(
-                          color: isDark ? Colors.white38 : Colors.black38,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: accentColor.withOpacity(0.2),
-                        shape: BoxShape.rectangle,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(Icons.add, size: 18, color: accentColor),
-                    ),
-                  ],
-                ),
+            // 2. Gratitude Journal (Below Benefits)
+            GratitudeCard(
+              items: gratitude,
+              isDark: isDark,
+              onAdd: () => _showAddSheet(
+                context,
+                user?.uid,
+                currentHabit.id,
+                "Gratitude",
+                "gratitude",
+              ),
+              onDelete: (item) => _deleteItem(
+                context,
+                user?.uid,
+                currentHabit.id,
+                "gratitude",
+                item,
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  // --- HELPER: DELETE BACKGROUND (Simplified) ---
-  Widget _buildDeleteBackground() {
-    return Container(); // Handled inline in Dismissible above for cleaner custom look
-  }
-
-  // --- EXISTING GLASS CARD HELPER ---
-  Widget _buildGlassCard({required Widget child, required bool isDark}) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-        child: Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withOpacity(0.05)
-                : Colors.white.withOpacity(0.6),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.white.withOpacity(0.5),
-              width: 1.5,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+        );
+      case 2:
+        // --- RISKS TAB (Includes Consequences + Resources) ---
+        return Column(
+          children: [
+            ConsequencesCard(
+              items: losses,
+              isDark: isDark,
+              onAdd: () => _showAddSheet(
+                context,
+                user?.uid,
+                currentHabit.id,
+                "Consequences",
+                "losses",
               ),
-            ],
-          ),
-          child: child,
-        ),
-      ),
-    );
+              onDelete: (item) => _deleteItem(
+                context,
+                user?.uid,
+                currentHabit.id,
+                "losses",
+                item,
+              ),
+            ),
+            const SizedBox(height: 24),
+            ResourceLibrary(isDark: isDark),
+          ],
+        );
+      default:
+        return Container();
+    }
   }
 
-  // --- EXISTING MANIFESTO CONTENT ---
-  Widget _buildReasonContent(String text, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
+  // --- TAB SWITCHER UI ---
+  Widget _buildTabSwitch(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withOpacity(0.05)
+            : Colors.black.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
         children: [
-          Text(
-            "MY MAIN REASON",
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white60 : Colors.black54,
-              letterSpacing: 1.0,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Icon(
-            PhosphorIcons.quotes(), // FIXED: Added ()
-            size: 32,
-            color: isDark ? Colors.white24 : Colors.black26,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            text,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 18,
-              height: 1.5,
-              fontWeight: FontWeight.w500,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-          ),
+          _buildTabItem("Wisdom", 0, isDark),
+          _buildTabItem("Benefits", 1, isDark),
+          _buildTabItem("Risks", 2, isDark),
         ],
       ),
     );
   }
 
-  // --- EXISTING JAR SECTION ---
-  Widget _buildJarSection(BuildContext context, bool isDark) {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              "DAILY WISDOM",
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white60 : Colors.black54,
-                letterSpacing: 1.0,
-              ),
-            ),
-            InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SavedWisdomScreen(),
-                  ),
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Row(
-                  children: [
-                    Text(
-                      "Wisdom Room",
-                      style: TextStyle(
-                        color: Colors.blueAccent,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
+  Widget _buildTabItem(String label, int index, bool isDark) {
+    final isSelected = _selectedIndex == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedIndex = index),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? (isDark ? Colors.white.withOpacity(0.1) : Colors.white)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: isSelected && !isDark
+                ? [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
                     ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      PhosphorIcons.arrowRight(), // FIXED: Added ()
-                      size: 12,
-                      color: Colors.blueAccent,
-                    ),
-                  ],
-                ),
-              ),
+                  ]
+                : [],
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              color: isSelected
+                  ? (isDark ? Colors.white : Colors.black)
+                  : (isDark ? Colors.white54 : Colors.black54),
+              fontSize: 14,
             ),
-          ],
+          ),
         ),
-        const SizedBox(height: 12),
-        const JarOfWisdom(),
-      ],
+      ),
     );
   }
 
-  // --- LOGIC: ADD/DELETE ---
+  // --- LOGIC HELPERS ---
   void _showAddSheet(
     BuildContext context,
     String? uid,
@@ -559,7 +382,6 @@ class _MotivationTabState extends State<MotivationTab>
                 ? const Color(0xFF1E293B).withOpacity(0.9)
                 : Colors.white.withOpacity(0.9),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-            border: Border.all(color: Colors.white.withOpacity(0.2)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -580,9 +402,6 @@ class _MotivationTabState extends State<MotivationTab>
                 style: TextStyle(color: isDark ? Colors.white : Colors.black),
                 decoration: InputDecoration(
                   hintText: "Type here...",
-                  hintStyle: TextStyle(
-                    color: isDark ? Colors.white38 : Colors.black38,
-                  ),
                   filled: true,
                   fillColor: isDark ? Colors.black26 : Colors.grey[100],
                   border: OutlineInputBorder(
@@ -599,7 +418,6 @@ class _MotivationTabState extends State<MotivationTab>
                     final text = controller.text.trim();
                     if (text.isEmpty) return;
                     Navigator.of(sheetContext).pop();
-
                     await FirebaseFirestore.instance
                         .collection('users')
                         .doc(uid)
@@ -608,13 +426,11 @@ class _MotivationTabState extends State<MotivationTab>
                         .update({
                           key: FieldValue.arrayUnion([text]),
                         });
-
-                    if (context.mounted) {
+                    if (context.mounted)
                       Provider.of<HabitProvider>(
                         context,
                         listen: false,
                       ).fetchHabits();
-                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
@@ -649,40 +465,7 @@ class _MotivationTabState extends State<MotivationTab>
         .update({
           key: FieldValue.arrayRemove([item]),
         });
-
-    if (context.mounted) {
+    if (context.mounted)
       Provider.of<HabitProvider>(context, listen: false).fetchHabits();
-    }
-  }
-}
-
-// --- SUPPORT BUTTON (Solid Action Button) ---
-class SupportButton extends StatelessWidget {
-  final VoidCallback onPressed;
-  const SupportButton({super.key, required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFE11D48),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          elevation: 4,
-          shadowColor: const Color(0xFFE11D48).withOpacity(0.4),
-        ),
-        icon: Icon(PhosphorIcons.lifebuoy(), size: 24),
-        label: const Text(
-          "Urge Assistance",
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
-        ),
-      ),
-    );
   }
 }

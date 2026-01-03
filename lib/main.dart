@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart'; // <--- Added Google Fonts Import
+import 'package:google_fonts/google_fonts.dart';
 
 // Import your providers and screens
 import 'package:my_auth_project/services/theme_provider.dart';
@@ -64,6 +64,9 @@ class MyApp extends StatelessWidget {
       useMaterial3: true,
       brightness: brightness,
       scaffoldBackgroundColor: bgColor,
+      // --- FIX: Set Global FontFamily ---
+      fontFamily: GoogleFonts.inter().fontFamily,
+      // ----------------------------------
       appBarTheme: AppBarTheme(
         backgroundColor: bgColor,
         elevation: 0,

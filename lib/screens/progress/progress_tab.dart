@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:my_auth_project/screens/progress/widgets/stats_box.dart';
 import 'package:provider/provider.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
@@ -13,6 +12,11 @@ import 'widgets/mood_history_list.dart';
 import 'widgets/progress_calendar.dart';
 import 'widgets/vulnerability_analysis.dart';
 import 'widgets/animated_orb_background.dart';
+
+// --- WIDGET IMPORTS ---
+// If you have StatBox in a separate file, keep your import.
+// If it's in the same file, the class is at the bottom of this code.
+import 'package:my_auth_project/screens/progress/widgets/stats_box.dart';
 
 class ProgressTab extends StatefulWidget {
   const ProgressTab({super.key});
@@ -69,7 +73,16 @@ class _ProgressTabState extends State<ProgressTab> {
           );
         }
 
+        // 1. Calculate Live Duration
         final Duration diff = DateTime.now().difference(currentHabit.startDate);
+
+        // 2. LOGIC FIX: Determine the actual longest streak to display
+        // If your current run is better than your history, show the current run!
+        final int currentStreakDays = diff.inDays;
+        final int displayLongest =
+            (currentStreakDays > currentHabit.longestStreak)
+            ? currentStreakDays
+            : currentHabit.longestStreak;
 
         return Scaffold(
           body: Stack(
@@ -108,7 +121,8 @@ class _ProgressTabState extends State<ProgressTab> {
                             const SizedBox(width: 16),
                             StatBox(
                               label: "Longest Streak",
-                              value: "${currentHabit.longestStreak} days",
+                              // Use the fixed variable here
+                              value: "$displayLongest days",
                               accent: Colors.orangeAccent,
                               isDark: isDark,
                               icon: PhosphorIcons.trophy(),
@@ -166,7 +180,6 @@ class _ProgressTabState extends State<ProgressTab> {
   }
 
   // --- SIMPLE HEADER WIDGETS ---
-  // (Small enough to keep here, or can be moved to another file if you want)
 
   Widget _buildHeader(String habitTitle, bool isDark) {
     return Column(

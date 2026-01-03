@@ -12,6 +12,9 @@ class Habit {
   final Map<String, dynamic> history;
   final List<String> gains;
   final List<String> losses;
+  // --- NEW: GRATITUDE LIST ---
+  final List<String> gratitude;
+
   final int longestStreak;
   final int totalRelapses;
 
@@ -31,10 +34,12 @@ class Habit {
     this.history = const {},
     this.gains = const [],
     this.losses = const [],
+    // Initialize gratitude with empty list
+    this.gratitude = const [],
     this.longestStreak = 0,
     this.totalRelapses = 0,
     this.triggerStats = const {},
-    this.lastPledgeDate, // Initialize
+    this.lastPledgeDate,
   });
 
   factory Habit.fromFirestore(DocumentSnapshot doc) {
@@ -59,10 +64,11 @@ class Habit {
       history: Map<String, dynamic>.from(data['history'] ?? {}),
       gains: List<String>.from(data['gains'] ?? []),
       losses: List<String>.from(data['losses'] ?? []),
+      // Parse gratitude list safely
+      gratitude: List<String>.from(data['gratitude'] ?? []),
       longestStreak: data['longestStreak'] ?? 0,
       totalRelapses: data['totalRelapses'] ?? 0,
       triggerStats: Map<String, int>.from(data['triggerStats'] ?? {}),
-      // Parse new field
       lastPledgeDate: data['lastPledgeDate'] != null
           ? (data['lastPledgeDate'] as Timestamp).toDate()
           : null,
@@ -79,10 +85,11 @@ class Habit {
       'history': history,
       'gains': gains,
       'losses': losses,
+      // Save gratitude to Firebase
+      'gratitude': gratitude,
       'longestStreak': longestStreak,
       'totalRelapses': totalRelapses,
       'triggerStats': triggerStats,
-      // Save new field
       'lastPledgeDate': lastPledgeDate != null
           ? Timestamp.fromDate(lastPledgeDate!)
           : null,
