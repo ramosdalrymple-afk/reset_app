@@ -3,7 +3,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class Habit {
   final String id;
   final String title;
-  final String motivation;
+
+  // CHANGED: Now a List to support multiple reasons/manifestos
+  final List<dynamic> motivation;
+
   final DateTime startDate;
   final String category;
   final String icon;
@@ -12,6 +15,7 @@ class Habit {
   final Map<String, dynamic> history;
   final List<String> gains;
   final List<String> losses;
+
   // --- NEW: GRATITUDE LIST ---
   final List<String> gratitude;
 
@@ -28,13 +32,13 @@ class Habit {
     required this.id,
     required this.title,
     required this.startDate,
-    this.motivation = "To become a better version of myself.",
+    // Default is now a List with one item
+    this.motivation = const ["To become a better version of myself."],
     this.category = "General",
     this.icon = "⭐",
     this.history = const {},
     this.gains = const [],
     this.losses = const [],
-    // Initialize gratitude with empty list
     this.gratitude = const [],
     this.longestStreak = 0,
     this.totalRelapses = 0,
@@ -45,6 +49,7 @@ class Habit {
   factory Habit.fromFirestore(DocumentSnapshot doc) {
     Map data = doc.data() as Map<String, dynamic>;
 
+    // 1. Date Parsing
     DateTime parsedDate;
     if (data['startDate'] is Timestamp) {
       parsedDate = (data['startDate'] as Timestamp).toDate();
@@ -54,17 +59,29 @@ class Habit {
       parsedDate = DateTime.now();
     }
 
+    // 2. Smart Motivation Parsing (Handles String vs List)
+    List<dynamic> parsedMotivation = [];
+    if (data['motivation'] is String) {
+      // If legacy data (String), wrap it in a List
+      parsedMotivation = [data['motivation']];
+    } else if (data['motivation'] is List) {
+      // If new data (List), use as is
+      parsedMotivation = data['motivation'];
+    } else {
+      // Fallback default
+      parsedMotivation = ["To become a better version of myself."];
+    }
+
     return Habit(
       id: doc.id,
       title: data['title'] ?? '',
-      motivation: data['motivation'] ?? "To become a better version of myself.",
+      motivation: parsedMotivation, // Use the parsed list
       startDate: parsedDate,
       category: data['category'] ?? 'General',
       icon: data['icon'] ?? '⭐',
       history: Map<String, dynamic>.from(data['history'] ?? {}),
       gains: List<String>.from(data['gains'] ?? []),
       losses: List<String>.from(data['losses'] ?? []),
-      // Parse gratitude list safely
       gratitude: List<String>.from(data['gratitude'] ?? []),
       longestStreak: data['longestStreak'] ?? 0,
       totalRelapses: data['totalRelapses'] ?? 0,
@@ -78,14 +95,13 @@ class Habit {
   Map<String, dynamic> toMap() {
     return {
       'title': title,
-      'motivation': motivation,
+      'motivation': motivation, // Saves as a List
       'startDate': Timestamp.fromDate(startDate),
       'category': category,
       'icon': icon,
       'history': history,
       'gains': gains,
       'losses': losses,
-      // Save gratitude to Firebase
       'gratitude': gratitude,
       'longestStreak': longestStreak,
       'totalRelapses': totalRelapses,

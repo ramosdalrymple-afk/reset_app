@@ -1,8 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:my_auth_project/screens/motivation/widget/consequences_card.dart';
+import 'package:my_auth_project/screens/motivation/widget/stress_popper.dart';
 import 'package:provider/provider.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:my_auth_project/services/auth_service.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
 import 'package:my_auth_project/services/habit_provider.dart';
@@ -114,10 +115,21 @@ class _MotivationTabState extends State<MotivationTab>
           return const Center(child: Text("No habit selected"));
         }
 
-        final String rootWhy = currentHabit.motivation;
+        // --- DATA PREPARATION (FIXED) ---
+        // 1. Cast to 'dynamic' to bypass the compiler error.
+        //    This allows us to handle both String (old model) and List (new data) at runtime.
+        dynamic rawMotivation = currentHabit.motivation;
+
+        List<dynamic> motivationList = [];
+        if (rawMotivation is List) {
+          motivationList = rawMotivation;
+        } else {
+          // If it's a String, wrap it in a List
+          motivationList = [rawMotivation.toString()];
+        }
+
         final List<dynamic> gains = currentHabit.gains;
         final List<dynamic> losses = currentHabit.losses;
-        // Ensure the model has been updated to include 'gratitude'
         final List<dynamic> gratitude = currentHabit.gratitude;
 
         return Scaffold(
@@ -158,18 +170,100 @@ class _MotivationTabState extends State<MotivationTab>
                         ],
                       ),
                       const SizedBox(height: 24),
-                      SupportButton(
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => const EmergencyScreen(),
+
+                      // --- TOOLKIT ROW (Symmetrical) ---
+                      Row(
+                        children: [
+                          // 1. Emergency Button
+                          Expanded(
+                            child: SupportButton(
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => const EmergencyScreen(),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+
+                          const SizedBox(width: 12),
+
+                          // 2. Stress Poppers Button
+                          Expanded(
+                            child: InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const StressPopperScreen(),
+                                  ),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(18),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 18,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? Colors.blueAccent.withOpacity(0.2)
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: isDark
+                                        ? Colors.blueAccent.withOpacity(0.5)
+                                        : Colors.blue.withOpacity(0.2),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.blue.withOpacity(0.1),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      PhosphorIcons.circlesFour(
+                                        PhosphorIconsStyle.fill,
+                                      ),
+                                      color: Colors.blueAccent,
+                                      size: 24,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      "Stress Poppers",
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.blueAccent,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
+
                       const SizedBox(height: 24),
-                      ManifestoCard(text: rootWhy, isDark: isDark),
+
+                      // --- UPDATED MANIFESTO CARD ---
+                      ManifestoCard(
+                        items: motivationList, // Pass the fixed list
+                        isDark: isDark,
+                        uid: user?.uid,
+                        habitId: currentHabit.id,
+                      ),
+
                       const SizedBox(height: 32),
 
-                      // --- TAB SWITCHER (3 Tabs) ---
+                      // --- TAB SWITCHER ---
                       _buildTabSwitch(isDark),
                       const SizedBox(height: 20),
 
@@ -215,10 +309,9 @@ class _MotivationTabState extends State<MotivationTab>
       case 0:
         return WisdomSection(isDark: isDark);
       case 1:
-        // --- BENEFITS TAB (Includes Benefits + Gratitude) ---
+        // --- BENEFITS TAB ---
         return Column(
           children: [
-            // 1. Benefits of Recovery
             BenefitsCard(
               items: gains,
               isDark: isDark,
@@ -238,8 +331,6 @@ class _MotivationTabState extends State<MotivationTab>
               ),
             ),
             const SizedBox(height: 24),
-
-            // 2. Gratitude Journal (Below Benefits)
             GratitudeCard(
               items: gratitude,
               isDark: isDark,
@@ -261,7 +352,7 @@ class _MotivationTabState extends State<MotivationTab>
           ],
         );
       case 2:
-        // --- RISKS TAB (Includes Consequences + Resources) ---
+        // --- RISKS TAB ---
         return Column(
           children: [
             ConsequencesCard(

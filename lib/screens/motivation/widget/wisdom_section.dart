@@ -15,7 +15,7 @@ class WisdomSection extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              "DAILY WISDOM",
+              "WISDOM JAR",
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,

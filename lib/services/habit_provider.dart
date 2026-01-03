@@ -14,21 +14,16 @@ class HabitProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
 
   // --- NEW: AGGREGATE HISTORY (ALL HABITS) ---
-  // This is used by the "All Habits" toggle on the Progress Page.
   Map<String, dynamic> get combinedHistory {
     final Map<String, dynamic> combined = {};
 
     for (final habit in _habits) {
       habit.history.forEach((dateKey, status) {
-        // If we already have a status for this date...
         if (combined.containsKey(dateKey)) {
-          // If the NEW status is 'relapse', it overrides 'clean'.
-          // (Because 1 relapse means the day wasn't perfect).
           if (status == 'relapse') {
             combined[dateKey] = 'relapse';
           }
         } else {
-          // No entry for this date yet, just take the status.
           combined[dateKey] = status;
         }
       });
@@ -90,10 +85,9 @@ class HabitProvider with ChangeNotifier {
         .collection('habits')
         .doc(habitId)
         .collection('pledgeHistory')
-        .orderBy('date', descending: true) // Newest entries first
+        .orderBy('date', descending: true)
         .snapshots();
   }
-  // -------------------------
 
   // --- FETCH HABITS ---
   Future<void> fetchHabits() async {
@@ -101,7 +95,6 @@ class HabitProvider with ChangeNotifier {
     if (user == null) return;
 
     _isLoading = true;
-    // notifyListeners(); // Optional: Uncomment if you want loading spinners immediately
 
     try {
       final snapshot = await FirebaseFirestore.instance
@@ -114,7 +107,6 @@ class HabitProvider with ChangeNotifier {
       _habits = snapshot.docs.map((doc) => Habit.fromFirestore(doc)).toList();
 
       if (_habits.isNotEmpty) {
-        // logic to keep the currently selected habit selected if it still exists
         if (_selectedHabit == null ||
             !_habits.any((h) => h.id == _selectedHabit!.id)) {
           _selectedHabit = _habits.first;
@@ -140,7 +132,7 @@ class HabitProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // --- ADD HABIT ---
+  // --- ADD HABIT (UPDATED) ---
   Future<void> addHabit(String title, DateTime date, String motivation) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -152,11 +144,12 @@ class HabitProvider with ChangeNotifier {
           .collection('habits')
           .doc();
 
+      // Ensure motivation is initialized as a List
       final newHabit = Habit(
         id: newDoc.id,
         title: title,
         startDate: date,
-        motivation: motivation,
+        motivation: [motivation], // <--- WRAPPED IN LIST
       );
 
       await newDoc.set(newHabit.toMap());
