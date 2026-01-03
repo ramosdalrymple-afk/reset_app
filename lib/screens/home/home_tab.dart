@@ -2,19 +2,22 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:my_auth_project/widgets/global_app_bar.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Import Firestore
+
 import 'package:my_auth_project/services/auth_service.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
 import 'package:my_auth_project/services/habit_provider.dart';
 import 'package:my_auth_project/models/habit_model.dart';
+import 'package:my_auth_project/services/wisdom_service.dart';
 
 // Widgets
 import 'widgets/animated_background.dart';
 import 'widgets/time_bar.dart';
 import 'widgets/quote_card.dart';
 import 'widgets/action_buttons.dart';
+import 'widgets/weekly_calendar.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
@@ -26,28 +29,70 @@ class HomeTab extends StatefulWidget {
 class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   Timer? _ticker;
   late AnimationController _bgController;
-
-  final List<String> _dailyQuotes = [
-    "One day at a time; this is enough. Do not look back.",
-    "The secret of getting ahead is getting started.",
-    "Recovery is a process, not an event.",
-    "Your best days are ahead of you.",
-    "Small progress is still progress. Keep going.",
-    "Success is the sum of small efforts repeated daily.",
-    "Believe you can and you're halfway there.",
-  ];
+  WisdomItem? _dailyWisdom;
+  bool _isLoadingQuote = true;
 
   @override
   void initState() {
     super.initState();
+    _fetchNewQuote();
     _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) setState(() {});
     });
-
     _bgController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
     )..repeat(reverse: true);
+  }
+
+  Future<void> _fetchNewQuote() async {
+    try {
+      final item = await WisdomService().shakeTheJar();
+      if (mounted) {
+        setState(() {
+          _dailyWisdom = item;
+          _isLoadingQuote = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching quote: $e");
+      if (mounted) setState(() => _isLoadingQuote = false);
+    }
+  }
+
+  // --- NEW: Function to save to Firestore ---
+  void _saveQuoteToVault() async {
+    final user = AuthService().currentUser;
+    if (user == null || _dailyWisdom == null) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('saved_wisdom')
+          .add({
+            'text': _dailyWisdom!.text,
+            'source': _dailyWisdom!.source,
+            'type': _dailyWisdom!.type,
+            'savedAt': FieldValue.serverTimestamp(),
+          });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Saved to your Wisdom Vault"),
+            backgroundColor: Colors.teal,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error saving quote: $e");
+    }
   }
 
   @override
@@ -55,13 +100,6 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     _ticker?.cancel();
     _bgController.dispose();
     super.dispose();
-  }
-
-  String _getQuote() {
-    int dayOfYear = DateTime.now()
-        .difference(DateTime(DateTime.now().year, 1, 1))
-        .inDays;
-    return _dailyQuotes[dayOfYear % _dailyQuotes.length];
   }
 
   @override
@@ -90,9 +128,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
         }
 
         return Scaffold(
-          // 1. Extend body behind app bar for full-screen animated background
           extendBodyBehindAppBar: true,
-          // 2. Add the AppBar here so layout knows about it
           body: Stack(
             children: [
               AnimatedBackground(controller: _bgController, isDark: isDark),
@@ -118,14 +154,11 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     bool isDark,
   ) {
     final Duration diff = DateTime.now().difference(habit.startDate);
-
-    // Calculate Percentages
     double secPercent = (diff.inSeconds % 60) / 60.0;
     double minPercent = (diff.inMinutes % 60) / 60.0;
     double hourPercent = (diff.inHours % 24) / 24.0;
     double dayPercent = (diff.inDays % 30) / 30.0;
 
-    // Logic Checks
     final now = DateTime.now();
     final String dateKey =
         "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
@@ -134,8 +167,6 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     bool isStreakTooShort = diff.inSeconds < 30;
 
     return SafeArea(
-      // 3. Keep top: true so we don't overlap the Notch/Status Bar
-      // But we will manage the AppBar spacing manually below
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
@@ -145,70 +176,88 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.start,
                   children: [
-                    // TOP SECTION
-                    Column(
-                      children: [
-                        // 4. FIX: Use kToolbarHeight (56px) instead of 60.
-                        // This pushes content just enough to clear the GlobalAppBar.
-                        const SizedBox(height: kToolbarHeight),
+                    const SizedBox(height: kToolbarHeight),
 
-                        _buildHeader(habit.title, isDark),
+                    // 1. HEADER
+                    _buildHeader(habit.title, isDark),
+                    const SizedBox(height: 20),
 
-                        // 5. FIX: Reduced from 30 to 16 to tighten the UI
-                        const SizedBox(height: 16),
-
-                        TimeBar(
-                          value: "${diff.inDays}",
-                          label: "days",
-                          color: const Color(0xFF2DD4BF),
-                          percentage: dayPercent,
-                          isDark: isDark,
-                        ),
-                        const SizedBox(height: 10), // Slightly reduced from 12
-                        TimeBar(
-                          value: "${diff.inHours % 24}",
-                          label: "hours",
-                          color: const Color(0xFF3B82F6),
-                          percentage: hourPercent,
-                          isDark: isDark,
-                        ),
-                        const SizedBox(height: 10),
-                        TimeBar(
-                          value: "${diff.inMinutes % 60}",
-                          label: "minutes",
-                          color: const Color(0xFF6366F1),
-                          percentage: minPercent,
-                          isDark: isDark,
-                        ),
-                        const SizedBox(height: 10),
-                        TimeBar(
-                          value: "${diff.inSeconds % 60}",
-                          label: "seconds",
-                          color: const Color(0xFF8B5CF6),
-                          percentage: secPercent,
-                          isDark: isDark,
-                        ),
-                      ],
+                    // 2. THE TRADEMARK TIMER
+                    TimeBar(
+                      value: "${diff.inDays}",
+                      label: "days",
+                      color: const Color(0xFF2DD4BF),
+                      percentage: dayPercent,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 8),
+                    TimeBar(
+                      value: "${diff.inHours % 24}",
+                      label: "hours",
+                      color: const Color(0xFF3B82F6),
+                      percentage: hourPercent,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 8),
+                    TimeBar(
+                      value: "${diff.inMinutes % 60}",
+                      label: "minutes",
+                      color: const Color(0xFF6366F1),
+                      percentage: minPercent,
+                      isDark: isDark,
+                    ),
+                    const SizedBox(height: 8),
+                    TimeBar(
+                      value: "${diff.inSeconds % 60}",
+                      label: "seconds",
+                      color: const Color(0xFF8B5CF6),
+                      percentage: secPercent,
+                      isDark: isDark,
                     ),
 
-                    // BOTTOM SECTION
-                    Column(
-                      children: [
-                        // 6. FIX: Reduced from 40 to 24
-                        const SizedBox(height: 24),
-                        QuoteCard(isDark: isDark, quote: _getQuote()),
-                        const SizedBox(height: 24), // Reduced from 32
-                        ActionButtons(
-                          isAlreadyClean: isAlreadyClean,
-                          isStreakTooShort: isStreakTooShort,
-                          onCleanTap: () => _confirmClean(context, habit),
-                          onRelapseTap: () => _confirmReset(context, habit),
-                        ),
-                        const SizedBox(height: 20),
-                      ],
+                    const SizedBox(height: 24),
+
+                    // 3. ACTION BUTTONS
+                    ActionButtons(
+                      isAlreadyClean: isAlreadyClean,
+                      isStreakTooShort: isStreakTooShort,
+                      onCleanTap: () => _confirmClean(context, habit),
+                      onRelapseTap: () => _confirmReset(context, habit),
                     ),
+
+                    const SizedBox(height: 32),
+
+                    // 4. WEEKLY CHAIN
+                    WeeklyCalendar(history: habit.history, isDark: isDark),
+
+                    const SizedBox(height: 24),
+
+                    // 5. QUOTE CARD (With Heart Functionality)
+                    _isLoadingQuote
+                        ? SizedBox(
+                            height: 80,
+                            child: Center(
+                              child: Text(
+                                "...",
+                                style: TextStyle(
+                                  color: isDark ? Colors.white54 : Colors.grey,
+                                ),
+                              ),
+                            ),
+                          )
+                        : QuoteCard(
+                            isDark: isDark,
+                            quote:
+                                _dailyWisdom?.text ??
+                                "Your best days are ahead.",
+                            author: _dailyWisdom?.source ?? "Unknown",
+                            // Pass the save function here
+                            onSave: _saveQuoteToVault,
+                          ),
+
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
@@ -219,7 +268,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     );
   }
 
-  // --- HELPER METHODS & DIALOGS (Kept exactly the same as your code) ---
+  // --- HELPER METHODS ---
 
   Widget _buildHeader(String habitName, bool isDark) {
     return Column(
@@ -289,21 +338,11 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   }
 
   void _confirmReset(BuildContext context, Habit habit) {
-    // ... [Previous logic for Reset Dialog kept same] ...
-    // Note: I omitted the full body of _confirmReset to save space,
-    // simply paste your previous _confirmReset logic here.
     final isDark = Provider.of<ThemeProvider>(
       context,
       listen: false,
     ).isDarkMode;
     String? selectedTrigger;
-
-    // (Paste your triggers list and showDialog code here)
-    // ...
-    // If you need me to paste the full reset dialog code again, let me know!
-    // Just re-using the exact logic you provided in the prompt.
-
-    // TEMPORARY PLACEHOLDER FOR THE DIALOG CODE YOU SENT:
     final List<Map<String, dynamic>> triggers = [
       {'name': 'Stress', 'icon': Icons.bolt, 'color': Colors.orangeAccent},
       {'name': 'Boredom', 'icon': Icons.tv, 'color': Colors.blueAccent},

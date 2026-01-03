@@ -161,7 +161,6 @@ class _ProgressTabState extends State<ProgressTab>
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              // FIX: Added () to call the function
                               Icon(
                                 PhosphorIcons.target(),
                                 size: 16,
@@ -202,7 +201,6 @@ class _ProgressTabState extends State<ProgressTab>
                               _formatLiveStreak(diff),
                               const Color(0xFF3B82F6),
                               isDark,
-                              // FIX: Added ()
                               icon: PhosphorIcons.timer(),
                             ),
                             const SizedBox(width: 16),
@@ -211,16 +209,14 @@ class _ProgressTabState extends State<ProgressTab>
                               "$storedLongest days",
                               Colors.orangeAccent,
                               isDark,
-                              // FIX: Added ()
                               icon: PhosphorIcons.trophy(),
                             ),
                           ],
                         ),
                         const SizedBox(height: 32),
 
-                        // FIX: Added ()
                         _buildSectionHeader(
-                          "Calendar",
+                          "Progress Calendar",
                           PhosphorIcons.calendarBlank(),
                           isDark,
                         ),
@@ -234,18 +230,18 @@ class _ProgressTabState extends State<ProgressTab>
                           Colors.redAccent,
                           isDark,
                           isWide: true,
-                          // FIX: Added ()
                           icon: PhosphorIcons.warning(),
                         ),
                         const SizedBox(height: 32),
 
-                        // FIX: Added ()
                         _buildSectionHeader(
                           "Vulnerability Analysis",
                           PhosphorIcons.shieldWarning(),
                           isDark,
                         ),
                         const SizedBox(height: 16),
+
+                        // --- ENHANCED TRIGGER ANALYSIS ---
                         _buildTriggerAnalysis(triggerStats, isDark),
 
                         const SizedBox(height: 32),
@@ -346,12 +342,12 @@ class _ProgressTabState extends State<ProgressTab>
     );
   }
 
-  // --- TRIGGER ANALYSIS ---
+  // --- TRIGGER ANALYSIS (ENHANCED) ---
 
   Widget _buildTriggerAnalysis(Map<String, int> stats, bool isDark) {
     if (stats.isEmpty) {
       return Container(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(30),
         width: double.infinity,
         decoration: BoxDecoration(
           color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
@@ -360,106 +356,188 @@ class _ProgressTabState extends State<ProgressTab>
         ),
         child: Column(
           children: [
-            // FIX: Added ()
             Icon(
-              PhosphorIcons.checkCircle(),
-              size: 40,
-              color: Colors.grey[400],
+              PhosphorIcons.shieldCheck(),
+              size: 48,
+              color: Colors.greenAccent.withOpacity(0.7),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Text(
-              "No relapse data available.",
+              "No vulnerabilities detected",
               style: TextStyle(
-                color: isDark ? Colors.white70 : Colors.black87,
+                color: isDark ? Colors.white : Colors.black87,
                 fontWeight: FontWeight.bold,
+                fontSize: 16,
               ),
             ),
             const SizedBox(height: 4),
             Text(
-              "Keep up the great work!",
-              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+              "Great job staying on track!",
+              style: TextStyle(color: Colors.grey[500], fontSize: 13),
             ),
           ],
         ),
       );
     }
 
+    // 1. Sort data and calculate totals for percentages
     final sortedEntries = stats.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final maxCount = sortedEntries.first.value;
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
-        boxShadow: isDark
-            ? []
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-      ),
-      child: Column(
-        children: sortedEntries.map((entry) {
-          final double percent = entry.value / maxCount;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      entry.key,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white70 : Colors.black87,
-                      ),
-                    ),
-                    Text(
-                      "${entry.value}",
-                      style: const TextStyle(
-                        color: Colors.blueAccent,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Stack(
-                  children: [
-                    Container(
-                      height: 8,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white10 : Colors.grey[200],
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    AnimatedContainer(
-                      duration: const Duration(seconds: 1),
-                      height: 8,
-                      width: MediaQuery.of(context).size.width * 0.7 * percent,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Colors.blueAccent, Colors.cyanAccent],
-                        ),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+    final int totalCount = sortedEntries.fold(
+      0,
+      (sum, item) => sum + item.value,
+    );
+
+    return Column(
+      children: sortedEntries.asMap().entries.map((entry) {
+        final int index = entry.key;
+        final String trigger = entry.value.key;
+        final int count = entry.value.value;
+
+        // Calculate percentage relative to TOTAL relapses
+        final double percentage = totalCount > 0 ? (count / totalCount) : 0;
+        final String percentString =
+            "${(percentage * 100).toStringAsFixed(0)}%";
+
+        // Determine styling based on severity (Index 0 is the worst)
+        final Color color = _getTriggerColor(trigger, index);
+        final IconData icon = _getTriggerIcon(trigger);
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.black.withOpacity(0.05),
             ),
-          );
-        }).toList(),
-      ),
+            boxShadow: isDark
+                ? []
+                : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  // ICON BOX
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(icon, color: color, size: 22),
+                  ),
+                  const SizedBox(width: 16),
+
+                  // TEXT INFO
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              trigger,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.white10
+                                    : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                "$count times ($percentString)",
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? Colors.white54
+                                      : Colors.grey[600],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        // ANIMATED PROGRESS BAR
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            return Stack(
+                              children: [
+                                // Background Bar
+                                Container(
+                                  height: 10,
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: isDark
+                                        ? Colors.black26
+                                        : Colors.grey[200],
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                // Foreground Bar
+                                TweenAnimationBuilder<double>(
+                                  tween: Tween<double>(
+                                    begin: 0,
+                                    end: percentage,
+                                  ),
+                                  duration: const Duration(milliseconds: 1000),
+                                  curve: Curves.easeOutExpo,
+                                  builder: (context, value, _) {
+                                    return Container(
+                                      height: 10,
+                                      width: constraints.maxWidth * value,
+                                      decoration: BoxDecoration(
+                                        color: color,
+                                        borderRadius: BorderRadius.circular(10),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: color.withOpacity(0.4),
+                                            blurRadius: 6,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -578,7 +656,6 @@ class _ProgressTabState extends State<ProgressTab>
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
-                  // FIX: Added ()
                   leftChevronIcon: Icon(
                     PhosphorIcons.caretLeft(),
                     color: isDark ? Colors.white54 : Colors.black54,
@@ -679,5 +756,43 @@ class _ProgressTabState extends State<ProgressTab>
         ),
       ],
     );
+  }
+
+  // --- HELPER: GET COLORS & ICONS ---
+
+  IconData _getTriggerIcon(String trigger) {
+    switch (trigger.toLowerCase()) {
+      case 'stress':
+        return PhosphorIcons.lightning();
+      case 'boredom':
+        return PhosphorIcons.armchair();
+      case 'social':
+        return PhosphorIcons.usersThree();
+      case 'anxiety':
+        return PhosphorIcons.brain();
+      case 'urge':
+        return PhosphorIcons.fire();
+      case 'tired':
+        return PhosphorIcons.batteryWarning();
+      case 'sadness':
+        return PhosphorIcons.cloudRain();
+      default:
+        return PhosphorIcons.warningCircle();
+    }
+  }
+
+  Color _getTriggerColor(String trigger, int index) {
+    // Option B (Preferred): Color based on SEVERITY (Index in sorted list)
+    // #1 Trigger gets Red, #2 Orange, etc.
+    final List<Color> palette = [
+      const Color(0xFFFF5252), // Red Accent
+      const Color(0xFFFFAB40), // Orange Accent
+      const Color(0xFFFFD740), // Amber Accent
+      const Color(0xFF448AFF), // Blue Accent
+      const Color(0xFF69F0AE), // Green Accent
+    ];
+
+    // Return color from palette, or fallback to the last color if index is huge
+    return palette[index % palette.length];
   }
 }

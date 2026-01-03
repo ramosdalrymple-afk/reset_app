@@ -8,6 +8,10 @@ import 'package:my_auth_project/services/habit_provider.dart';
 import 'package:my_auth_project/models/habit_model.dart';
 import 'emergency_screen.dart';
 
+// --- CUSTOM WIDGET IMPORTS ---
+import 'package:my_auth_project/screens/motivation/widget/jar_widget.dart';
+import 'wisdom_screen.dart';
+
 class MotivationTab extends StatefulWidget {
   const MotivationTab({super.key});
 
@@ -97,6 +101,7 @@ class _MotivationTabState extends State<MotivationTab>
               _buildAnimatedBackground(isDark),
               SafeArea(
                 child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(), // Smoother scrolling
                   padding: const EdgeInsets.symmetric(horizontal: 24.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -123,7 +128,7 @@ class _MotivationTabState extends State<MotivationTab>
                       ),
                       const SizedBox(height: 24),
 
-                      // NEW: Replaced helper method with the Breathing Widget class
+                      // 1. PANIC BUTTON (Priority #1)
                       BreathingPanicButton(
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute(
@@ -134,6 +139,7 @@ class _MotivationTabState extends State<MotivationTab>
 
                       const SizedBox(height: 32),
 
+                      // 2. ROOT PURPOSE (Moved UP - Priority #2)
                       _buildSectionHeader(
                         "The Root Purpose",
                         Icons.anchor_rounded,
@@ -141,6 +147,79 @@ class _MotivationTabState extends State<MotivationTab>
                       _buildMotivationCard(rootWhy, isDark),
 
                       const SizedBox(height: 32),
+
+                      // 3. JAR OF WISDOM (Moved DOWN - Priority #3)
+                      // This prevents the expanding quote from pushing the main "Why" off screen
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(
+                                  Icons.lightbulb_outline,
+                                  size: 16,
+                                  color: Colors.grey,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  "JAR OF WISDOM",
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            // The Vault Navigation Button
+                            InkWell(
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const SavedWisdomScreen(),
+                                  ),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                child: Row(
+                                  children: const [
+                                    Text(
+                                      "Wisdom Room",
+                                      style: TextStyle(
+                                        color: Colors.blueAccent,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    SizedBox(width: 4),
+                                    Icon(
+                                      Icons.arrow_forward_ios,
+                                      size: 10,
+                                      color: Colors.blueAccent,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const Center(child: JarOfWisdom()),
+
+                      const SizedBox(height: 32),
+
+                      // 4. GAINS LIST
                       _buildListSection(
                         context,
                         user?.uid,
@@ -153,6 +232,8 @@ class _MotivationTabState extends State<MotivationTab>
                       ),
 
                       const SizedBox(height: 32),
+
+                      // 5. LOSSES LIST
                       _buildListSection(
                         context,
                         user?.uid,
@@ -163,7 +244,7 @@ class _MotivationTabState extends State<MotivationTab>
                         Colors.redAccent,
                         isDark,
                       ),
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 60), // Extra space for scrolling
                     ],
                   ),
                 ),
@@ -209,9 +290,8 @@ class _MotivationTabState extends State<MotivationTab>
         ...items.map(
           (item) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            // NEW: Dismissible wrapper for Swipe-to-Delete
             child: Dismissible(
-              key: ValueKey(item), // Assumes items are unique strings
+              key: ValueKey(item),
               direction: DismissDirection.endToStart,
               background: Container(
                 alignment: Alignment.centerRight,
@@ -266,7 +346,6 @@ class _MotivationTabState extends State<MotivationTab>
                             ),
                           ),
                         ),
-                        // Removed the old 'X' IconButton here
                       ],
                     ),
                   ),
@@ -461,8 +540,7 @@ class _MotivationTabState extends State<MotivationTab>
   );
 }
 
-// --- NEW CLASS: BREATHING PANIC BUTTON ---
-// Placed here for easy access, but ideally moved to 'widgets/breathing_button.dart'
+// --- BREATHING PANIC BUTTON (Kept as is) ---
 class BreathingPanicButton extends StatefulWidget {
   final VoidCallback onPressed;
   const BreathingPanicButton({super.key, required this.onPressed});
@@ -481,7 +559,7 @@ class _BreathingPanicButtonState extends State<BreathingPanicButton>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 2), // Slow, calming breath
+      duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
 
     _scaleAnimation = Tween<double>(
