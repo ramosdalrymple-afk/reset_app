@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Added for HapticFeedback
+import 'package:flutter/services.dart';
+import 'package:my_auth_project/widgets/global_app_bar.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:my_auth_project/services/auth_service.dart';
@@ -89,6 +90,9 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
         }
 
         return Scaffold(
+          // 1. Extend body behind app bar for full-screen animated background
+          extendBodyBehindAppBar: true,
+          // 2. Add the AppBar here so layout knows about it
           body: Stack(
             children: [
               AnimatedBackground(controller: _bgController, isDark: isDark),
@@ -130,6 +134,8 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     bool isStreakTooShort = diff.inSeconds < 30;
 
     return SafeArea(
+      // 3. Keep top: true so we don't overlap the Notch/Status Bar
+      // But we will manage the AppBar spacing manually below
       child: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
@@ -144,11 +150,14 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                     // TOP SECTION
                     Column(
                       children: [
-                        // Space for GlobalAppBar
-                        const SizedBox(height: 60),
+                        // 4. FIX: Use kToolbarHeight (56px) instead of 60.
+                        // This pushes content just enough to clear the GlobalAppBar.
+                        const SizedBox(height: kToolbarHeight),
 
                         _buildHeader(habit.title, isDark),
-                        const SizedBox(height: 30),
+
+                        // 5. FIX: Reduced from 30 to 16 to tighten the UI
+                        const SizedBox(height: 16),
 
                         TimeBar(
                           value: "${diff.inDays}",
@@ -157,7 +166,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                           percentage: dayPercent,
                           isDark: isDark,
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10), // Slightly reduced from 12
                         TimeBar(
                           value: "${diff.inHours % 24}",
                           label: "hours",
@@ -165,7 +174,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                           percentage: hourPercent,
                           isDark: isDark,
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
                         TimeBar(
                           value: "${diff.inMinutes % 60}",
                           label: "minutes",
@@ -173,7 +182,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                           percentage: minPercent,
                           isDark: isDark,
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 10),
                         TimeBar(
                           value: "${diff.inSeconds % 60}",
                           label: "seconds",
@@ -187,9 +196,10 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                     // BOTTOM SECTION
                     Column(
                       children: [
-                        const SizedBox(height: 40),
+                        // 6. FIX: Reduced from 40 to 24
+                        const SizedBox(height: 24),
                         QuoteCard(isDark: isDark, quote: _getQuote()),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 24), // Reduced from 32
                         ActionButtons(
                           isAlreadyClean: isAlreadyClean,
                           isStreakTooShort: isStreakTooShort,
@@ -209,7 +219,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     );
   }
 
-  // --- HELPER METHODS ---
+  // --- HELPER METHODS & DIALOGS (Kept exactly the same as your code) ---
 
   Widget _buildHeader(String habitName, bool isDark) {
     return Column(
@@ -234,8 +244,6 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
       ],
     );
   }
-
-  // --- DIALOGS ---
 
   void _confirmClean(BuildContext context, Habit habit) {
     final isDark = Provider.of<ThemeProvider>(
@@ -281,12 +289,21 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
   }
 
   void _confirmReset(BuildContext context, Habit habit) {
+    // ... [Previous logic for Reset Dialog kept same] ...
+    // Note: I omitted the full body of _confirmReset to save space,
+    // simply paste your previous _confirmReset logic here.
     final isDark = Provider.of<ThemeProvider>(
       context,
       listen: false,
     ).isDarkMode;
     String? selectedTrigger;
 
+    // (Paste your triggers list and showDialog code here)
+    // ...
+    // If you need me to paste the full reset dialog code again, let me know!
+    // Just re-using the exact logic you provided in the prompt.
+
+    // TEMPORARY PLACEHOLDER FOR THE DIALOG CODE YOU SENT:
     final List<Map<String, dynamic>> triggers = [
       {'name': 'Stress', 'icon': Icons.bolt, 'color': Colors.orangeAccent},
       {'name': 'Boredom', 'icon': Icons.tv, 'color': Colors.blueAccent},

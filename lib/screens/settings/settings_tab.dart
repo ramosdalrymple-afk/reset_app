@@ -9,11 +9,6 @@ import 'package:my_auth_project/services/theme_provider.dart';
 import 'package:my_auth_project/services/habit_provider.dart';
 import 'package:my_auth_project/models/habit_model.dart';
 
-// // Import your new widgets
-// import 'widgets/settings_card.dart';
-// import 'widgets/user_header.dart';
-// import 'widgets/add_habit_sheet.dart';
-
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
 
@@ -48,9 +43,7 @@ class _SettingsTabState extends State<SettingsTab>
     return Scaffold(
       body: Stack(
         children: [
-          _buildAnimatedBackground(
-            isDark,
-          ), // Keeping background logic here is fine
+          _buildAnimatedBackground(isDark),
           Consumer<HabitProvider>(
             builder: (context, habitProvider, child) {
               final currentHabit = habitProvider.selectedHabit;
@@ -59,14 +52,15 @@ class _SettingsTabState extends State<SettingsTab>
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
-                    vertical: 20,
+                    // FIX: Removed 'vertical: 20' to match other tabs
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 20),
+                      // FIX: Reduced from 20 to 10
+                      const SizedBox(height: 10),
 
-                      // 1. User Header (Extracted)
+                      // 1. User Header
                       UserHeader(user: user),
 
                       const SizedBox(height: 40),
@@ -84,7 +78,7 @@ class _SettingsTabState extends State<SettingsTab>
                       ),
                       const SizedBox(height: 24),
 
-                      // 2. Active Habit Card (Using SettingsCard)
+                      // 2. Active Habit Card
                       SettingsCard(
                         title: "Active Habit",
                         subtitle: "Select which habit to track.",

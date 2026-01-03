@@ -45,6 +45,8 @@ dependencies:
   lottie: ^3.3.2
   google_fonts: ^6.3.3
   phosphor_flutter: ^2.1.0
+  fl_chart: ^1.1.1  # Industry standard for Flutter charts
+  
 
 dev_dependencies:
   flutter_test:

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -13,6 +12,66 @@ class HabitProvider with ChangeNotifier {
   List<Habit> get habits => _habits;
   Habit? get selectedHabit => _selectedHabit;
   bool get isLoading => _isLoading;
+
+  // --- NEW: PLEDGE LOGIC ---
+  bool get isPledgedToday {
+    if (_selectedHabit?.lastPledgeDate == null) return false;
+
+    final now = DateTime.now();
+    final pledge = _selectedHabit!.lastPledgeDate!;
+
+    return now.year == pledge.year &&
+        now.month == pledge.month &&
+        now.day == pledge.day;
+  }
+
+  // UPDATED: Now accepts mood and note
+  Future<void> takeDailyPledge(String habitId, String mood, String note) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    try {
+      final now = DateTime.now();
+
+      final habitRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('habits')
+          .doc(habitId);
+
+      // 1. Update Firestore Main Doc (for UI badge)
+      await habitRef.update({'lastPledgeDate': Timestamp.fromDate(now)});
+
+      // 2. Add to History Sub-collection (for Graphs/Journal)
+      await habitRef.collection('pledgeHistory').add({
+        'date': Timestamp.fromDate(now),
+        'mood': mood,
+        'note': note,
+      });
+
+      // 3. Refresh Data
+      await fetchHabits();
+    } catch (e) {
+      debugPrint("Pledge Error: $e");
+    }
+  }
+
+  // --- NEW: FETCH PLEDGE HISTORY STREAM ---
+  // This was missing and caused the error
+  Stream<QuerySnapshot> getPledgeHistoryStream(String habitId) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const Stream.empty();
+
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('habits')
+        .doc(habitId)
+        .collection('pledgeHistory')
+        .orderBy('date', descending: true) // Newest entries first
+        .snapshots();
+  }
+  // -------------------------
 
   // --- FETCH HABITS ---
   Future<void> fetchHabits() async {
@@ -147,7 +206,6 @@ class HabitProvider with ChangeNotifier {
     if (user == null) return;
 
     try {
-      // 1. Find the local habit to calculate if this was a new longest streak
       final habit = _habits.firstWhere((h) => h.id == habitId);
       final currentStreakDays = DateTime.now()
           .difference(habit.startDate)
@@ -158,23 +216,19 @@ class HabitProvider with ChangeNotifier {
         newLongestStreak = currentStreakDays;
       }
 
-      // 2. Update Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('habits')
           .doc(habitId)
           .update({
-            'startDate': Timestamp.now(), // Reset clock to NOW
+            'startDate': Timestamp.now(),
             'totalRelapses': FieldValue.increment(1),
             'longestStreak': newLongestStreak,
-            // Use dot notation to increment the specific trigger count
             'triggerStats.$trigger': FieldValue.increment(1),
-            // Mark today as a relapse in history
             'history.${_getTodayKey()}': 'relapse',
           });
 
-      // 3. Refresh data
       await fetchHabits();
     } catch (e) {
       debugPrint("Error resetting habit: $e");
@@ -182,7 +236,6 @@ class HabitProvider with ChangeNotifier {
     }
   }
 
-  // Helper for consistent date keys
   String _getTodayKey() {
     final now = DateTime.now();
     return "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";

@@ -15,8 +15,11 @@ class Habit {
   final int longestStreak;
   final int totalRelapses;
 
-  // --- NEW FIELD FOR TRIGGER MAP ---
+  // --- TRIGGER MAP ---
   final Map<String, int> triggerStats;
+
+  // --- NEW: PLEDGE DATE ---
+  final DateTime? lastPledgeDate;
 
   Habit({
     required this.id,
@@ -30,7 +33,8 @@ class Habit {
     this.losses = const [],
     this.longestStreak = 0,
     this.totalRelapses = 0,
-    this.triggerStats = const {}, // Initialize empty
+    this.triggerStats = const {},
+    this.lastPledgeDate, // Initialize
   });
 
   factory Habit.fromFirestore(DocumentSnapshot doc) {
@@ -57,8 +61,11 @@ class Habit {
       losses: List<String>.from(data['losses'] ?? []),
       longestStreak: data['longestStreak'] ?? 0,
       totalRelapses: data['totalRelapses'] ?? 0,
-      // Safely parse the trigger map
       triggerStats: Map<String, int>.from(data['triggerStats'] ?? {}),
+      // Parse new field
+      lastPledgeDate: data['lastPledgeDate'] != null
+          ? (data['lastPledgeDate'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -74,7 +81,11 @@ class Habit {
       'losses': losses,
       'longestStreak': longestStreak,
       'totalRelapses': totalRelapses,
-      'triggerStats': triggerStats, // Save stats to Firestore
+      'triggerStats': triggerStats,
+      // Save new field
+      'lastPledgeDate': lastPledgeDate != null
+          ? Timestamp.fromDate(lastPledgeDate!)
+          : null,
     };
   }
 }

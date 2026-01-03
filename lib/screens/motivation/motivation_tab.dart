@@ -4,8 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:my_auth_project/services/auth_service.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
-import 'package:my_auth_project/services/habit_provider.dart'; // NEW IMPORT
-import 'package:my_auth_project/models/habit_model.dart'; // NEW IMPORT
+import 'package:my_auth_project/services/habit_provider.dart';
+import 'package:my_auth_project/models/habit_model.dart';
 import 'emergency_screen.dart';
 
 class MotivationTab extends StatefulWidget {
@@ -79,7 +79,6 @@ class _MotivationTabState extends State<MotivationTab>
     final user = AuthService().currentUser;
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
 
-    // 1. REPLACED StreamBuilder with Consumer
     return Consumer<HabitProvider>(
       builder: (context, habitProvider, child) {
         final currentHabit = habitProvider.selectedHabit;
@@ -88,7 +87,6 @@ class _MotivationTabState extends State<MotivationTab>
           return const Center(child: Text("No habit selected"));
         }
 
-        // 2. READ DATA FROM MODEL
         final String rootWhy = currentHabit.motivation;
         final List<dynamic> gains = currentHabit.gains;
         final List<dynamic> losses = currentHabit.losses;
@@ -99,14 +97,12 @@ class _MotivationTabState extends State<MotivationTab>
               _buildAnimatedBackground(isDark),
               SafeArea(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24.0,
-                    vertical: 20,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 10),
+
                       Text(
                         "REMEMBER YOUR WHY",
                         style: TextStyle(
@@ -126,7 +122,16 @@ class _MotivationTabState extends State<MotivationTab>
                         ),
                       ),
                       const SizedBox(height: 24),
-                      _buildEmergencyButton(context),
+
+                      // NEW: Replaced helper method with the Breathing Widget class
+                      BreathingPanicButton(
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const EmergencyScreen(),
+                          ),
+                        ),
+                      ),
+
                       const SizedBox(height: 32),
 
                       _buildSectionHeader(
@@ -139,7 +144,7 @@ class _MotivationTabState extends State<MotivationTab>
                       _buildListSection(
                         context,
                         user?.uid,
-                        currentHabit.id, // PASS HABIT ID
+                        currentHabit.id,
                         "What I gain",
                         "gains",
                         gains,
@@ -151,7 +156,7 @@ class _MotivationTabState extends State<MotivationTab>
                       _buildListSection(
                         context,
                         user?.uid,
-                        currentHabit.id, // PASS HABIT ID
+                        currentHabit.id,
                         "What I lose",
                         "losses",
                         losses,
@@ -170,7 +175,8 @@ class _MotivationTabState extends State<MotivationTab>
     );
   }
 
-  // UPDATED: Now accepts habitId
+  // --- HELPER METHODS ---
+
   Widget _buildListSection(
     BuildContext context,
     String? uid,
@@ -194,7 +200,6 @@ class _MotivationTabState extends State<MotivationTab>
                 color: accentColor,
                 size: 24,
               ),
-              // Pass habitId to the sheet
               onPressed: () =>
                   _showAddSheet(context, uid, habitId, title, dbKey),
             ),
@@ -204,55 +209,66 @@ class _MotivationTabState extends State<MotivationTab>
         ...items.map(
           (item) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.05)
-                        : Colors.white.withOpacity(0.7),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isDark ? Colors.white10 : Colors.black12,
+            // NEW: Dismissible wrapper for Swipe-to-Delete
+            child: Dismissible(
+              key: ValueKey(item), // Assumes items are unique strings
+              direction: DismissDirection.endToStart,
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 20),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(
+                  Icons.delete_outline,
+                  color: Colors.redAccent,
+                ),
+              ),
+              onDismissed: (direction) {
+                _deleteItem(context, uid, habitId, dbKey, item);
+              },
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: accentColor,
-                          shape: BoxShape.circle,
-                        ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withOpacity(0.05)
+                          : Colors.white.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isDark ? Colors.white10 : Colors.black12,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Text(
-                          item.toString(),
-                          style: TextStyle(
-                            color: isDark ? Colors.white : Colors.black87,
-                            fontSize: 15,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: accentColor,
+                            shape: BoxShape.circle,
                           ),
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          size: 18,
-                          color: Colors.grey,
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Text(
+                            item.toString(),
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.black87,
+                              fontSize: 15,
+                            ),
+                          ),
                         ),
-                        // Pass habitId to delete
-                        onPressed: () =>
-                            _deleteItem(context, uid, habitId, dbKey, item),
-                      ),
-                    ],
+                        // Removed the old 'X' IconButton here
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -263,7 +279,6 @@ class _MotivationTabState extends State<MotivationTab>
     );
   }
 
-  // UPDATED: Writes to SUBCOLLECTION
   void _showAddSheet(
     BuildContext context,
     String? uid,
@@ -339,18 +354,16 @@ class _MotivationTabState extends State<MotivationTab>
 
                       Navigator.of(sheetContext).pop();
 
-                      // 1. Update Firestore Subcollection
                       await FirebaseFirestore.instance
                           .collection('users')
                           .doc(uid)
-                          .collection('habits') // Subcollection
-                          .doc(habitId) // Specific Habit
+                          .collection('habits')
+                          .doc(habitId)
                           .update({
                             key: FieldValue.arrayUnion([text]),
                           })
                           .catchError((e) => debugPrint("Sync error: $e"));
 
-                      // 2. Refresh Provider
                       if (context.mounted) {
                         Provider.of<HabitProvider>(
                           context,
@@ -380,7 +393,6 @@ class _MotivationTabState extends State<MotivationTab>
     );
   }
 
-  // UPDATED: Writes to SUBCOLLECTION
   void _deleteItem(
     BuildContext context,
     String? uid,
@@ -397,7 +409,6 @@ class _MotivationTabState extends State<MotivationTab>
           key: FieldValue.arrayRemove([item]),
         });
 
-    // Refresh Provider to show change immediately
     if (context.mounted) {
       Provider.of<HabitProvider>(context, listen: false).fetchHabits();
     }
@@ -448,25 +459,87 @@ class _MotivationTabState extends State<MotivationTab>
       ),
     ),
   );
+}
 
-  Widget _buildEmergencyButton(BuildContext context) => SizedBox(
-    width: double.infinity,
-    child: ElevatedButton.icon(
-      onPressed: () => Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (context) => const EmergencyScreen())),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFFB91C1C),
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 18),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        elevation: 0,
-      ),
-      icon: const Icon(Icons.bolt_rounded),
-      label: const Text(
-        "PANIC BUTTON",
-        style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.2),
-      ),
-    ),
-  );
+// --- NEW CLASS: BREATHING PANIC BUTTON ---
+// Placed here for easy access, but ideally moved to 'widgets/breathing_button.dart'
+class BreathingPanicButton extends StatefulWidget {
+  final VoidCallback onPressed;
+  const BreathingPanicButton({super.key, required this.onPressed});
+
+  @override
+  State<BreathingPanicButton> createState() => _BreathingPanicButtonState();
+}
+
+class _BreathingPanicButtonState extends State<BreathingPanicButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2), // Slow, calming breath
+    )..repeat(reverse: true);
+
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.05,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _scaleAnimation.value,
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(
+                    0xFFB91C1C,
+                  ).withOpacity(0.4 * _controller.value),
+                  blurRadius: 15 + (10 * _controller.value),
+                  spreadRadius: 2 * _controller.value,
+                ),
+              ],
+            ),
+            child: ElevatedButton.icon(
+              onPressed: widget.onPressed,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB91C1C),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.bolt_rounded),
+              label: const Text(
+                "PANIC BUTTON",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 }

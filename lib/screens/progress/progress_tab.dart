@@ -3,9 +3,15 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
 import 'package:my_auth_project/services/habit_provider.dart';
 import 'package:my_auth_project/models/habit_model.dart';
+
+// --- IMPORTS ---
+import 'widgets/daily_pledge_card.dart';
+import 'widgets/mood_history_graph.dart';
+import 'widgets/mood_history_list.dart';
 
 class ProgressTab extends StatefulWidget {
   const ProgressTab({super.key});
@@ -19,6 +25,9 @@ class _ProgressTabState extends State<ProgressTab>
   DateTime _focusedDay = DateTime.now();
   Timer? _ticker;
   late AnimationController _bgController;
+
+  // --- STATE FOR VIEW TOGGLE ---
+  int _selectedView = 0; // 0 = Overview, 1 = Insights
 
   @override
   void initState() {
@@ -41,10 +50,12 @@ class _ProgressTabState extends State<ProgressTab>
   }
 
   String _formatLiveStreak(Duration diff) {
-    if (diff.inDays > 0)
+    if (diff.inDays > 0) {
       return "${diff.inDays}d ${diff.inHours % 24}h ${diff.inMinutes % 60}m";
-    if (diff.inHours > 0)
-      return "${diff.inHours}h ${diff.inMinutes % 60}m ${diff.inSeconds % 60}s";
+    }
+    if (diff.inHours > 0) {
+      return "${diff.inHours}h ${diff.inMinutes % 60}m";
+    }
     return "${diff.inMinutes}m ${diff.inSeconds % 60}s";
   }
 
@@ -105,15 +116,18 @@ class _ProgressTabState extends State<ProgressTab>
         final currentHabit = habitProvider.selectedHabit;
 
         if (habitProvider.isLoading) {
-          return const Center(child: CircularProgressIndicator());
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
         if (currentHabit == null) {
-          return const Center(child: Text("No habit selected."));
+          return const Scaffold(
+            body: Center(child: Text("No habit selected.")),
+          );
         }
 
         final DateTime startDate = currentHabit.startDate;
         final Duration diff = DateTime.now().difference(startDate);
-
         final int storedLongest = currentHabit.longestStreak;
         final int totalRelapses = currentHabit.totalRelapses;
         final Map<String, dynamic> history = currentHabit.history;
@@ -125,76 +139,123 @@ class _ProgressTabState extends State<ProgressTab>
               _buildAnimatedBackground(isDark),
               SafeArea(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 20,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Space for GlobalAppBar
-                      const SizedBox(height: 60),
+                      const SizedBox(height: 10),
 
-                      Text(
-                        "My Progress",
-                        style: TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.black,
-                          letterSpacing: -1,
-                        ),
-                      ),
-                      Text(
-                        currentHabit.title,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isDark ? Colors.white54 : Colors.black54,
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      Row(
+                      // --- HEADER ---
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildStatBox(
-                            "Current Streak",
-                            _formatLiveStreak(diff),
-                            const Color(0xFF3B82F6),
-                            isDark,
+                          Text(
+                            "My Progress",
+                            style: TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.w800,
+                              color: isDark ? Colors.white : Colors.black,
+                              letterSpacing: -1,
+                            ),
                           ),
-                          const SizedBox(width: 15),
-                          _buildStatBox(
-                            "Longest Streak",
-                            "$storedLongest days",
-                            Colors.orangeAccent,
-                            isDark,
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              // FIX: Added () to call the function
+                              Icon(
+                                PhosphorIcons.target(),
+                                size: 16,
+                                color: isDark ? Colors.white54 : Colors.black54,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                currentHabit.title.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1,
+                                  color: isDark
+                                      ? Colors.white54
+                                      : Colors.black54,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                      const SizedBox(height: 15),
-                      _buildStatBox(
-                        "Total Relapses",
-                        "$totalRelapses",
-                        Colors.redAccent,
-                        isDark,
-                        isWide: true,
-                      ),
-                      const SizedBox(height: 32),
-                      _buildCalendarCard(history, isDark),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
 
-                      // --- NEW VULNERABILITY SECTION ---
-                      Text(
-                        "Vulnerability Analysis",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.black,
-                          letterSpacing: -0.5,
+                      // --- 1. TOGGLE VIEW ---
+                      _buildSegmentedControl(isDark),
+                      const SizedBox(height: 24),
+
+                      // --- 2. SWITCH CONTENT ---
+                      if (_selectedView == 0) ...[
+                        // === OVERVIEW TAB ===
+                        const DailyPledgeCard(),
+                        const SizedBox(height: 24),
+
+                        Row(
+                          children: [
+                            _buildStatBox(
+                              "Current Streak",
+                              _formatLiveStreak(diff),
+                              const Color(0xFF3B82F6),
+                              isDark,
+                              // FIX: Added ()
+                              icon: PhosphorIcons.timer(),
+                            ),
+                            const SizedBox(width: 16),
+                            _buildStatBox(
+                              "Longest Streak",
+                              "$storedLongest days",
+                              Colors.orangeAccent,
+                              isDark,
+                              // FIX: Added ()
+                              icon: PhosphorIcons.trophy(),
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildTriggerAnalysis(triggerStats, isDark),
+                        const SizedBox(height: 32),
 
-                      const SizedBox(height: 50),
+                        // FIX: Added ()
+                        _buildSectionHeader(
+                          "Calendar",
+                          PhosphorIcons.calendarBlank(),
+                          isDark,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildCalendarCard(history, isDark),
+                      ] else ...[
+                        // === INSIGHTS TAB ===
+                        _buildStatBox(
+                          "Total Relapses",
+                          "$totalRelapses",
+                          Colors.redAccent,
+                          isDark,
+                          isWide: true,
+                          // FIX: Added ()
+                          icon: PhosphorIcons.warning(),
+                        ),
+                        const SizedBox(height: 32),
+
+                        // FIX: Added ()
+                        _buildSectionHeader(
+                          "Vulnerability Analysis",
+                          PhosphorIcons.shieldWarning(),
+                          isDark,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildTriggerAnalysis(triggerStats, isDark),
+
+                        const SizedBox(height: 32),
+                        const MoodHistoryGraph(),
+
+                        const SizedBox(height: 32),
+                        const MoodHistoryList(),
+                      ],
+
+                      const SizedBox(height: 80), // Extra bottom padding
                     ],
                   ),
                 ),
@@ -206,96 +267,203 @@ class _ProgressTabState extends State<ProgressTab>
     );
   }
 
+  // --- WIDGETS ---
+
+  Widget _buildSectionHeader(String title, IconData icon, bool isDark) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 24,
+          color: isDark ? Colors.blueAccent : Colors.blueGrey,
+        ),
+        const SizedBox(width: 10),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSegmentedControl(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200],
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          _buildSegmentButton("Overview", 0, isDark),
+          _buildSegmentButton("Insights", 1, isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSegmentButton(String text, int index, bool isDark) {
+    final isSelected = _selectedView == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedView = index),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? (isDark ? const Color(0xFF3B82F6) : Colors.white)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: isSelected && !isDark
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [],
+          ),
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: isSelected
+                  ? (isDark ? Colors.white : Colors.black)
+                  : (isDark ? Colors.white54 : Colors.grey[600]),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- TRIGGER ANALYSIS ---
+
   Widget _buildTriggerAnalysis(Map<String, int> stats, bool isDark) {
     if (stats.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(24),
         width: double.infinity,
         decoration: BoxDecoration(
-          color: isDark
-              ? Colors.white.withOpacity(0.05)
-              : Colors.black.withOpacity(0.02),
-          borderRadius: BorderRadius.circular(20),
+          color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
         ),
-        child: const Center(
-          child: Text(
-            "No relapse data yet. Stay strong!",
-            style: TextStyle(color: Colors.grey),
-          ),
+        child: Column(
+          children: [
+            // FIX: Added ()
+            Icon(
+              PhosphorIcons.checkCircle(),
+              size: 40,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "No relapse data available.",
+              style: TextStyle(
+                color: isDark ? Colors.white70 : Colors.black87,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "Keep up the great work!",
+              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+            ),
+          ],
         ),
       );
     }
 
-    // Sort stats by count descending
     final sortedEntries = stats.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-
     final maxCount = sortedEntries.first.value;
 
-    return Column(
-      children: sortedEntries.map((entry) {
-        final double percent = entry.value / maxCount;
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    entry.key,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white70 : Colors.black87,
-                    ),
-                  ),
-                  Text(
-                    "${entry.value} times",
-                    style: const TextStyle(
-                      color: Colors.blueAccent,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Stack(
-                children: [
-                  Container(
-                    height: 8,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white10 : Colors.black12,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  AnimatedContainer(
-                    duration: const Duration(seconds: 1),
-                    height: 8,
-                    width: MediaQuery.of(context).size.width * 0.7 * percent,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Colors.blueAccent, Colors.cyanAccent],
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+      ),
+      child: Column(
+        children: sortedEntries.map((entry) {
+          final double percent = entry.value / maxCount;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      entry.key,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white70 : Colors.black87,
                       ),
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blueAccent.withOpacity(0.3),
-                          blurRadius: 8,
-                        ),
-                      ],
                     ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      }).toList(),
+                    Text(
+                      "${entry.value}",
+                      style: const TextStyle(
+                        color: Colors.blueAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Stack(
+                  children: [
+                    Container(
+                      height: 8,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white10 : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    AnimatedContainer(
+                      duration: const Duration(seconds: 1),
+                      height: 8,
+                      width: MediaQuery.of(context).size.width * 0.7 * percent,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Colors.blueAccent, Colors.cyanAccent],
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
+
+  // --- STAT BOX ---
 
   Widget _buildStatBox(
     String label,
@@ -303,11 +471,12 @@ class _ProgressTabState extends State<ProgressTab>
     Color accent,
     bool isDark, {
     bool isWide = false,
+    IconData? icon,
   }) {
     return Expanded(
       flex: isWide ? 0 : 1,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(
@@ -316,28 +485,46 @@ class _ProgressTabState extends State<ProgressTab>
             decoration: BoxDecoration(
               color: isDark
                   ? Colors.white.withOpacity(0.05)
-                  : Colors.white.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(20),
+                  : Colors.white.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(24),
               border: Border.all(
                 color: isDark ? Colors.white10 : Colors.black12,
                 width: 1.0,
               ),
+              boxShadow: isDark
+                  ? []
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.03),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    fontSize: 13,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (icon != null)
+                      Icon(icon, size: 20, color: accent.withOpacity(0.7)),
+                  ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 12),
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: value.length > 10 ? 15 : 22,
-                    fontWeight: FontWeight.bold,
+                    fontSize: value.length > 10 ? 18 : 24,
+                    fontWeight: FontWeight.w800,
                     color: accent,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
@@ -350,19 +537,30 @@ class _ProgressTabState extends State<ProgressTab>
     );
   }
 
+  // --- CALENDAR ---
+
   Widget _buildCalendarCard(Map<String, dynamic> history, bool isDark) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          padding: const EdgeInsets.only(bottom: 20),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: isDark
-                ? Colors.white.withOpacity(0.03)
-                : Colors.white.withOpacity(0.8),
+                ? Colors.white.withOpacity(0.05)
+                : Colors.white.withOpacity(0.9),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+            boxShadow: isDark
+                ? []
+                : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
           ),
           child: Column(
             children: [
@@ -377,16 +575,17 @@ class _ProgressTabState extends State<ProgressTab>
                   titleCentered: true,
                   titleTextStyle: TextStyle(
                     color: isDark ? Colors.white : Colors.black,
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
+                  // FIX: Added ()
                   leftChevronIcon: Icon(
-                    Icons.chevron_left,
-                    color: isDark ? Colors.white : Colors.black54,
+                    PhosphorIcons.caretLeft(),
+                    color: isDark ? Colors.white54 : Colors.black54,
                   ),
                   rightChevronIcon: Icon(
-                    Icons.chevron_right,
-                    color: isDark ? Colors.white : Colors.black54,
+                    PhosphorIcons.caretRight(),
+                    color: isDark ? Colors.white54 : Colors.black54,
                   ),
                 ),
                 calendarStyle: CalendarStyle(
@@ -395,6 +594,14 @@ class _ProgressTabState extends State<ProgressTab>
                   ),
                   weekendTextStyle: const TextStyle(color: Colors.redAccent),
                   outsideDaysVisible: false,
+                  todayDecoration: BoxDecoration(
+                    color: Colors.blueAccent.withOpacity(0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  todayTextStyle: const TextStyle(
+                    color: Colors.blueAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 calendarBuilders: CalendarBuilders(
                   prioritizedBuilder: (context, day, focusedDay) {
@@ -428,9 +635,9 @@ class _ProgressTabState extends State<ProgressTab>
       margin: const EdgeInsets.all(6),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withOpacity(0.2),
         shape: BoxShape.circle,
-        border: Border.all(color: color, width: 1.5),
+        border: Border.all(color: color, width: 2),
       ),
       child: Text(
         '${day.day}',
