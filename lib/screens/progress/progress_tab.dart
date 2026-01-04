@@ -259,7 +259,7 @@ class _ProgressTabState extends State<ProgressTab> {
         children: [
           _buildSegmentButton("Overview", 0, isDark),
           _buildSegmentButton("Insights", 1, isDark),
-          _buildSegmentButton("Journey", 2, isDark), // New Tab
+          _buildSegmentButton("Milestone", 2, isDark), // New Tab
         ],
       ),
     );

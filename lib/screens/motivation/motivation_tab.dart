@@ -3,14 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:flutter_animate/flutter_animate.dart'; // 🟢 ADDED THIS IMPORT
+
+import 'package:my_auth_project/screens/motivation/ai_chat_creen.dart';
 import 'package:my_auth_project/services/auth_service.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
 import 'package:my_auth_project/services/habit_provider.dart';
 import 'package:my_auth_project/models/habit_model.dart';
 import 'emergency_screen.dart';
 
+import 'package:my_auth_project/screens/journal/widgets/add_trigger_sheet.dart';
+
 // --- WIDGET IMPORTS ---
-import 'widget/ambient_background.dart'; // <--- NEW IMPORT
+import 'widget/ambient_background.dart';
 import 'widget/stress_popper.dart';
 import 'widget/support_button.dart';
 import 'widget/manifesto_card.dart';
@@ -60,7 +65,6 @@ class _MotivationTabState extends State<MotivationTab> {
           extendBodyBehindAppBar: true,
           body: Stack(
             children: [
-              // --- NEW BACKGROUND WIDGET ---
               AmbientBackground(isDark: isDark),
 
               SafeArea(
@@ -97,7 +101,11 @@ class _MotivationTabState extends State<MotivationTab> {
                       ),
                       const SizedBox(height: 24),
 
-                      // --- TOOLKIT ROW ---
+                      // --- 1. AI PEPTALK (Now with GLITTER!) ---
+                      _buildAiPeptalkCard(context, isDark),
+                      const SizedBox(height: 24),
+
+                      // --- 2. TOOLKIT ROW ---
                       Row(
                         children: [
                           Expanded(
@@ -173,9 +181,9 @@ class _MotivationTabState extends State<MotivationTab> {
                         ],
                       ),
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 32),
 
-                      // --- MANIFESTO CARD ---
+                      // --- 3. MANIFESTO CARD ---
                       ManifestoCard(
                         items: motivationList,
                         isDark: isDark,
@@ -185,7 +193,7 @@ class _MotivationTabState extends State<MotivationTab> {
 
                       const SizedBox(height: 32),
 
-                      // --- TAB SWITCHER ---
+                      // --- 4. TAB SWITCHER ---
                       _buildTabSwitch(isDark),
                       const SizedBox(height: 20),
 
@@ -202,6 +210,7 @@ class _MotivationTabState extends State<MotivationTab> {
                             gratitude: gratitude,
                             user: user,
                             currentHabit: currentHabit,
+                            habitProvider: habitProvider,
                           ),
                         ),
                       ),
@@ -217,6 +226,316 @@ class _MotivationTabState extends State<MotivationTab> {
     );
   }
 
+  // --- WIDGETS ---
+
+  // 🟢 UPDATED: Magical Glitter Effect Added
+  Widget _buildAiPeptalkCard(BuildContext context, bool isDark) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const AiChatScreen()),
+        );
+      },
+      borderRadius: BorderRadius.circular(24),
+      child:
+          Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      Color(0xFF6366F1),
+                      Color(0xFF8B5CF6),
+                    ], // Indigo to Purple
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6366F1).withOpacity(0.3),
+                      blurRadius: 15,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    // 🟢 SPARKLE ICON ANIMATION (Pulsing & Rotating)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child:
+                          const Icon(
+                                PhosphorIconsFill.sparkle,
+                                color: Colors.white,
+                                size: 24,
+                              )
+                              .animate(
+                                onPlay: (controller) =>
+                                    controller.repeat(reverse: true),
+                              )
+                              .scaleXY(
+                                begin: 1.0,
+                                end: 1.2,
+                                duration: 1.5.seconds,
+                                curve: Curves.easeInOut,
+                              ) // Breathe
+                              .rotate(
+                                begin: -0.05,
+                                end: 0.05,
+                                duration: 2.seconds,
+                              ), // Subtle wiggle
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          Text(
+                            "Need a Strategy?",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            "Chat with the AI Coach.",
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(PhosphorIcons.caretRight(), color: Colors.white70),
+                  ],
+                ),
+              )
+              // 🟢 CARD GLITTER ANIMATION (Shimmer Sweep)
+              .animate(onPlay: (controller) => controller.repeat())
+              .shimmer(
+                duration: 2.5.seconds, // Speed of the glitter pass
+                color: Colors.white.withOpacity(0.3), // Color of the "shine"
+                angle: 120, // Diagonal sweep
+              ),
+    );
+  }
+
+  // --- TRIGGER TRACKER WIDGETS --- (Rest of file remains unchanged)
+
+  Widget _buildTriggerSectionHeader(
+    BuildContext context,
+    String habitId,
+    bool isDark,
+  ) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          "Trigger Log",
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
+        InkWell(
+          onTap: () {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (_) => AddTriggerSheet(habitId: habitId, isDark: isDark),
+            );
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.blueAccent,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blueAccent.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: const [
+                Icon(PhosphorIconsFill.plus, size: 14, color: Colors.white),
+                SizedBox(width: 4),
+                Text(
+                  "Log New",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCompactTriggerList(
+    HabitProvider provider,
+    String habitId,
+    bool isDark,
+    BuildContext context,
+  ) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: provider.getTriggerLogsStream(habitId),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(30),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: isDark ? Colors.white10 : Colors.grey[200]!,
+              ),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  PhosphorIcons.checkCircle(),
+                  color: Colors.greenAccent,
+                  size: 40,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  "No triggers logged yet.",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Staying clean? That's amazing!",
+                  style: TextStyle(
+                    color: isDark ? Colors.white54 : Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final logs = snapshot.data!.docs;
+
+        return ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: logs.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          itemBuilder: (context, index) {
+            final doc = logs[index];
+            final data = doc.data() as Map<String, dynamic>;
+            final intensity = data['intensity'] ?? 0;
+
+            return Dismissible(
+              key: Key(doc.id),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 20),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  PhosphorIcons.trash(),
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              onDismissed: (_) => provider.deleteTriggerLog(habitId, doc.id),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark ? Colors.white10 : Colors.grey[100]!,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: _getColorForIntensity(intensity),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data['triggerName'] ?? 'Unknown',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                          if (data['note'] != null && data['note'].isNotEmpty)
+                            Text(
+                              data['note'],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? Colors.white54 : Colors.grey,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      "$intensity/10",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        color: _getColorForIntensity(intensity),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Color _getColorForIntensity(int intensity) {
+    if (intensity <= 3) return Colors.green;
+    if (intensity <= 6) return Colors.orange;
+    return Colors.redAccent;
+  }
+
   // --- CONTENT SELECTOR ---
   Widget _buildSelectedContent({
     required int index,
@@ -226,11 +545,12 @@ class _MotivationTabState extends State<MotivationTab> {
     required List<dynamic> gratitude,
     required dynamic user,
     required Habit currentHabit,
+    required HabitProvider habitProvider,
   }) {
     switch (index) {
-      case 0:
+      case 0: // Wisdom
         return WisdomSection(isDark: isDark);
-      case 1:
+      case 1: // Benefits
         return Column(
           children: [
             BenefitsCard(
@@ -272,7 +592,7 @@ class _MotivationTabState extends State<MotivationTab> {
             ),
           ],
         );
-      case 2:
+      case 2: // Risks
         return Column(
           children: [
             ConsequencesCard(
@@ -297,6 +617,19 @@ class _MotivationTabState extends State<MotivationTab> {
             ResourceLibrary(isDark: isDark),
           ],
         );
+      case 3: // Triggers
+        return Column(
+          children: [
+            _buildTriggerSectionHeader(context, currentHabit.id, isDark),
+            const SizedBox(height: 16),
+            _buildCompactTriggerList(
+              habitProvider,
+              currentHabit.id,
+              isDark,
+              context,
+            ),
+          ],
+        );
       default:
         return Container();
     }
@@ -317,6 +650,7 @@ class _MotivationTabState extends State<MotivationTab> {
           _buildTabItem("Wisdom", 0, isDark),
           _buildTabItem("Benefits", 1, isDark),
           _buildTabItem("Risks", 2, isDark),
+          _buildTabItem("Triggers", 3, isDark),
         ],
       ),
     );
@@ -353,7 +687,7 @@ class _MotivationTabState extends State<MotivationTab> {
               color: isSelected
                   ? (isDark ? Colors.white : Colors.black)
                   : (isDark ? Colors.white54 : Colors.black54),
-              fontSize: 14,
+              fontSize: 13,
             ),
           ),
         ),
@@ -437,12 +771,11 @@ class _MotivationTabState extends State<MotivationTab> {
                         .update({
                           key: FieldValue.arrayUnion([text]),
                         });
-                    if (context.mounted) {
+                    if (context.mounted)
                       Provider.of<HabitProvider>(
                         context,
                         listen: false,
                       ).fetchHabits();
-                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
