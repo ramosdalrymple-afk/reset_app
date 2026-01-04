@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+// 🟢 NEW IMPORT
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // Import your providers and screens
 import 'package:my_auth_project/services/theme_provider.dart';
@@ -11,6 +13,11 @@ import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 🟢 LOAD THE SECRET KEY
+  // This reads the .env file so the key is ready to use anywhere in the app
+  await dotenv.load(fileName: ".env");
+
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,

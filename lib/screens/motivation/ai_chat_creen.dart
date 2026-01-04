@@ -1,13 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:my_auth_project/screens/journal/community_tab.dart';
-import 'package:my_auth_project/screens/motivation/widget/stress_popper.dart';
 import 'package:provider/provider.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'package:my_auth_project/services/theme_provider.dart';
 import 'package:my_auth_project/models/habit_model.dart';
@@ -16,9 +15,11 @@ import 'package:my_auth_project/services/habit_provider.dart';
 
 // 🟢 IMPORT YOUR SCREENS
 import 'emergency_screen.dart';
+import 'package:my_auth_project/screens/journal/community_tab.dart';
+import 'package:my_auth_project/screens/motivation/widget/stress_popper.dart';
 
 // --- CONFIG ---
-const String _geminiKey = "AIzaSyAxMyB-hlB0oWmSRTwk_EQzygo8Hbd0lgQ";
+// 🟢 CONFIRMED: Using the model you correctly identified earlier.
 const String _modelName = "gemini-2.5-flash";
 
 class ChatMessage {
@@ -56,7 +57,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
     "🔥 I have a strong urge",
     "😞 I feel like giving up",
     "🏆 I need motivation",
-    "🆘 I need help now", // Changed to be more relevant to crisis
+    "🆘 I need help now",
   ];
 
   @override
@@ -93,7 +94,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
       case 'COMMUNITY':
         targetScreen = const CommunityTab();
         break;
-      case 'CRISIS': // 🟢 NEW: Directs to Emergency Screen for help
+      case 'CRISIS':
         targetScreen = const EmergencyScreen();
         break;
       default:
@@ -105,7 +106,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
     );
   }
 
-  // Helper to build the global context string (same as before)
   String _buildGlobalContext() {
     final provider = Provider.of<HabitProvider>(context, listen: false);
     final habits = provider.habits;
@@ -147,9 +147,19 @@ class _AiChatScreenState extends State<AiChatScreen> {
       final user = AuthService().currentUser;
       final userName = user?.displayName ?? "Friend";
 
+      // 🟢 SAFE KEY LOADING
+      final geminiKey = dotenv.env['GEMINI_API_KEY'];
+
+      if (geminiKey == null || geminiKey.isEmpty) {
+        if (mounted) {
+          setState(() => _isTyping = false);
+          _addMessage("System: API Key missing in .env file.", false);
+        }
+        return;
+      }
+
       final globalStatSheet = _buildGlobalContext();
 
-      // 🟢 CRITICAL UPDATE: ADDED CRISIS PROTOCOL & NUMBERS
       final systemInstruction =
           """
       System: You are 'The Anchor', a recovery coach for $userName.
@@ -189,7 +199,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
             ],
           },
         ],
-        // 🟢 SAFETY SETTINGS: MUST BE BLOCK_NONE to allow discussion of "harm" so we can help
         "safetySettings": [
           {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
           {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -205,7 +214,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
       });
 
       final url = Uri.parse(
-        'https://generativelanguage.googleapis.com/v1beta/models/$_modelName:generateContent?key=$_geminiKey',
+        'https://generativelanguage.googleapis.com/v1beta/models/$_modelName:generateContent?key=$geminiKey',
       );
 
       final response = await http.post(
@@ -221,7 +230,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
 
           String? detectedAction;
 
-          // 🟢 NEW CRISIS TAG PARSING
           if (aiText.contains('<NAV:CRISIS>')) {
             detectedAction = 'CRISIS';
             aiText = aiText.replaceAll('<NAV:CRISIS>', '').trim();
@@ -241,17 +249,38 @@ class _AiChatScreenState extends State<AiChatScreen> {
             _addMessage(aiText, false, action: detectedAction);
           }
         }
-      } else {
-        debugPrint("🔴 GEMINI ERROR: ${response.statusCode}");
+      } else if (response.statusCode == 429) {
+        debugPrint("🔴 GEMINI ERROR: 429 (Too Many Requests)");
         if (mounted) {
           setState(() => _isTyping = false);
-          _addMessage("System: Connection error.", false);
+          _addMessage(
+            "I'm receiving too many messages right now. Please wait 1 minute and try again.",
+            false,
+          );
+        }
+      } else if (response.statusCode == 404) {
+        debugPrint("🔴 GEMINI ERROR: 404 (Model Not Found)");
+        if (mounted) {
+          setState(() => _isTyping = false);
+          _addMessage(
+            "System: Model '$_modelName' not found. Please check your config.",
+            false,
+          );
+        }
+      } else {
+        debugPrint(
+          "🔴 GEMINI ERROR: ${response.statusCode} - ${response.body}",
+        );
+        if (mounted) {
+          setState(() => _isTyping = false);
+          _addMessage("System: Server error (${response.statusCode}).", false);
         }
       }
     } catch (e) {
+      debugPrint("🔴 EXCEPTION: $e");
       if (mounted) {
         setState(() => _isTyping = false);
-        _addMessage("I'm having trouble connecting.", false);
+        _addMessage("I'm having trouble connecting to the internet.", false);
       }
     }
   }
@@ -397,7 +426,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
         label = "Go to Community";
         color = Colors.blue;
         break;
-      case 'CRISIS': // 🟢 NEW BUTTON STYLE
+      case 'CRISIS':
         icon = PhosphorIconsFill.phoneCall;
         label = "Emergency Support";
         color = Colors.redAccent;
