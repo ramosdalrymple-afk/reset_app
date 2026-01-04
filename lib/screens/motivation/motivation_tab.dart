@@ -1,7 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:my_auth_project/screens/motivation/widget/stress_popper.dart';
 import 'package:provider/provider.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:my_auth_project/services/auth_service.dart';
@@ -11,6 +10,8 @@ import 'package:my_auth_project/models/habit_model.dart';
 import 'emergency_screen.dart';
 
 // --- WIDGET IMPORTS ---
+import 'widget/ambient_background.dart'; // <--- NEW IMPORT
+import 'widget/stress_popper.dart';
 import 'widget/support_button.dart';
 import 'widget/manifesto_card.dart';
 import 'widget/benefits_card.dart';
@@ -26,81 +27,8 @@ class MotivationTab extends StatefulWidget {
   State<MotivationTab> createState() => _MotivationTabState();
 }
 
-class _MotivationTabState extends State<MotivationTab>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _bgController;
+class _MotivationTabState extends State<MotivationTab> {
   int _selectedIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _bgController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 30),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _bgController.dispose();
-    super.dispose();
-  }
-
-  // --- BACKGROUND ---
-  Widget _buildAmbientBackground(bool isDark) {
-    return AnimatedBuilder(
-      animation: _bgController,
-      builder: (context, child) {
-        return Stack(
-          children: [
-            Container(color: Theme.of(context).scaffoldBackgroundColor),
-            Positioned(
-              top: -100 + (50 * _bgController.value),
-              left: -50,
-              child: _buildOrb(
-                300,
-                isDark ? Colors.purpleAccent : Colors.blueAccent,
-                isDark,
-              ),
-            ),
-            Positioned(
-              bottom: -100 + (50 * _bgController.value),
-              right: -50,
-              child: _buildOrb(
-                300,
-                isDark ? Colors.tealAccent : Colors.cyanAccent,
-                isDark,
-              ),
-            ),
-            Positioned(
-              top: 300 + (100 * _bgController.value),
-              left: -100 + (200 * _bgController.value),
-              child: _buildOrb(
-                250,
-                isDark ? Colors.indigoAccent : Colors.blue,
-                isDark,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildOrb(double size, Color color, bool isDark) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color.withOpacity(isDark ? 0.15 : 0.2),
-      ),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-        child: Container(color: Colors.transparent),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -115,16 +43,12 @@ class _MotivationTabState extends State<MotivationTab>
           return const Center(child: Text("No habit selected"));
         }
 
-        // --- DATA PREPARATION (FIXED) ---
-        // 1. Cast to 'dynamic' to bypass the compiler error.
-        //    This allows us to handle both String (old model) and List (new data) at runtime.
+        // --- DATA PREPARATION ---
         dynamic rawMotivation = currentHabit.motivation;
-
         List<dynamic> motivationList = [];
         if (rawMotivation is List) {
           motivationList = rawMotivation;
         } else {
-          // If it's a String, wrap it in a List
           motivationList = [rawMotivation.toString()];
         }
 
@@ -136,7 +60,9 @@ class _MotivationTabState extends State<MotivationTab>
           extendBodyBehindAppBar: true,
           body: Stack(
             children: [
-              _buildAmbientBackground(isDark),
+              // --- NEW BACKGROUND WIDGET ---
+              AmbientBackground(isDark: isDark),
+
               SafeArea(
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
@@ -171,10 +97,9 @@ class _MotivationTabState extends State<MotivationTab>
                       ),
                       const SizedBox(height: 24),
 
-                      // --- TOOLKIT ROW (Symmetrical) ---
+                      // --- TOOLKIT ROW ---
                       Row(
                         children: [
-                          // 1. Emergency Button
                           Expanded(
                             child: SupportButton(
                               onPressed: () => Navigator.of(context).push(
@@ -184,10 +109,7 @@ class _MotivationTabState extends State<MotivationTab>
                               ),
                             ),
                           ),
-
                           const SizedBox(width: 12),
-
-                          // 2. Stress Poppers Button
                           Expanded(
                             child: InkWell(
                               onTap: () {
@@ -253,9 +175,9 @@ class _MotivationTabState extends State<MotivationTab>
 
                       const SizedBox(height: 24),
 
-                      // --- UPDATED MANIFESTO CARD ---
+                      // --- MANIFESTO CARD ---
                       ManifestoCard(
-                        items: motivationList, // Pass the fixed list
+                        items: motivationList,
                         isDark: isDark,
                         uid: user?.uid,
                         habitId: currentHabit.id,
@@ -309,7 +231,6 @@ class _MotivationTabState extends State<MotivationTab>
       case 0:
         return WisdomSection(isDark: isDark);
       case 1:
-        // --- BENEFITS TAB ---
         return Column(
           children: [
             BenefitsCard(
@@ -352,7 +273,6 @@ class _MotivationTabState extends State<MotivationTab>
           ],
         );
       case 2:
-        // --- RISKS TAB ---
         return Column(
           children: [
             ConsequencesCard(
@@ -418,10 +338,10 @@ class _MotivationTabState extends State<MotivationTab>
             borderRadius: BorderRadius.circular(12),
             boxShadow: isSelected && !isDark
                 ? [
-                    BoxShadow(
+                    const BoxShadow(
                       color: Colors.black12,
                       blurRadius: 4,
-                      offset: const Offset(0, 2),
+                      offset: Offset(0, 2),
                     ),
                   ]
                 : [],
@@ -517,11 +437,12 @@ class _MotivationTabState extends State<MotivationTab>
                         .update({
                           key: FieldValue.arrayUnion([text]),
                         });
-                    if (context.mounted)
+                    if (context.mounted) {
                       Provider.of<HabitProvider>(
                         context,
                         listen: false,
                       ).fetchHabits();
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blueAccent,
@@ -556,7 +477,8 @@ class _MotivationTabState extends State<MotivationTab>
         .update({
           key: FieldValue.arrayRemove([item]),
         });
-    if (context.mounted)
+    if (context.mounted) {
       Provider.of<HabitProvider>(context, listen: false).fetchHabits();
+    }
   }
 }

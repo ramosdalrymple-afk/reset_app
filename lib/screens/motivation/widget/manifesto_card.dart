@@ -1,9 +1,7 @@
-import 'dart:async'; // Needed for Timer
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:my_auth_project/services/habit_provider.dart';
 
@@ -43,7 +41,7 @@ class _ManifestoCardState extends State<ManifestoCard> {
 
   // --- AUTO PLAY LOGIC ---
   void _startAutoPlay() {
-    _timer?.cancel(); // Cancel any existing timer
+    _timer?.cancel();
     if (widget.items.length > 1) {
       _timer = Timer.periodic(const Duration(seconds: 6), (timer) {
         if (mounted) {
@@ -61,38 +59,35 @@ class _ManifestoCardState extends State<ManifestoCard> {
 
   // --- CRUD LOGIC ---
   void _addReason() {
-    _stopAutoPlay(); // Pause while editing
+    if (widget.habitId == null) return;
+    _stopAutoPlay();
     _showEditorDialog(initialText: "", isNew: true);
   }
 
   void _editCurrentReason() {
-    if (widget.items.isEmpty) return;
-    _stopAutoPlay(); // Pause while editing
+    if (widget.items.isEmpty || widget.habitId == null) return;
+    _stopAutoPlay();
     _showEditorDialog(initialText: widget.items[_currentIndex], isNew: false);
   }
 
   void _deleteCurrentReason() async {
-    if (widget.items.isEmpty) return;
+    if (widget.items.isEmpty || widget.habitId == null) return;
 
     _stopAutoPlay();
     final itemToDelete = widget.items[_currentIndex];
 
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.uid)
-        .collection('habits')
-        .doc(widget.habitId)
-        .update({
-          'motivation': FieldValue.arrayRemove([itemToDelete]),
-        });
+    // UPDATED: Use Provider to delete and update local state
+    await Provider.of<HabitProvider>(
+      context,
+      listen: false,
+    ).deleteMotivation(widget.habitId!, itemToDelete);
 
     if (_currentIndex >= widget.items.length - 1) {
       setState(() => _currentIndex = 0);
     }
 
-    if (mounted) {
-      Provider.of<HabitProvider>(context, listen: false).fetchHabits();
-      // Restart auto play after a short delay so user sees the change
+    // Resume auto-play if applicable
+    if (mounted && widget.items.isNotEmpty) {
       Future.delayed(const Duration(seconds: 2), _startAutoPlay);
     }
   }
@@ -128,43 +123,24 @@ class _ManifestoCardState extends State<ManifestoCard> {
               onPressed: () async {
                 final text = controller.text.trim();
                 if (text.isEmpty) return;
-
                 Navigator.pop(context);
 
+                final provider = Provider.of<HabitProvider>(
+                  context,
+                  listen: false,
+                );
+
                 if (isNew) {
-                  await FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(widget.uid)
-                      .collection('habits')
-                      .doc(widget.habitId)
-                      .update({
-                        'motivation': FieldValue.arrayUnion([text]),
-                      });
+                  // UPDATED: Use Provider
+                  await provider.addMotivation(widget.habitId!, text);
                 } else {
+                  // UPDATED: Use Provider
                   final oldText = widget.items[_currentIndex];
-                  final batch = FirebaseFirestore.instance.batch();
-                  final docRef = FirebaseFirestore.instance
-                      .collection('users')
-                      .doc(widget.uid)
-                      .collection('habits')
-                      .doc(widget.habitId);
-
-                  batch.update(docRef, {
-                    'motivation': FieldValue.arrayRemove([oldText]),
-                  });
-                  batch.update(docRef, {
-                    'motivation': FieldValue.arrayUnion([text]),
-                  });
-
-                  await batch.commit();
+                  await provider.editMotivation(widget.habitId!, oldText, text);
                 }
 
                 if (mounted) {
-                  Provider.of<HabitProvider>(
-                    context,
-                    listen: false,
-                  ).fetchHabits();
-                  _startAutoPlay(); // Resume after saving
+                  _startAutoPlay();
                 }
               },
               child: const Text("Save"),
@@ -177,14 +153,14 @@ class _ManifestoCardState extends State<ManifestoCard> {
 
   // --- NAVIGATION ---
   void _next() {
-    _startAutoPlay(); // Reset timer so it doesn't jump immediately after click
+    _startAutoPlay();
     setState(() {
       _currentIndex = (_currentIndex + 1) % widget.items.length;
     });
   }
 
   void _prev() {
-    _startAutoPlay(); // Reset timer
+    _startAutoPlay();
     setState(() {
       _currentIndex =
           (_currentIndex - 1 + widget.items.length) % widget.items.length;
@@ -193,12 +169,10 @@ class _ManifestoCardState extends State<ManifestoCard> {
 
   @override
   Widget build(BuildContext context) {
-    // Re-check auto play if items changed (e.g. went from 1 to 2 items)
     if (_timer == null && widget.items.length > 1) {
       _startAutoPlay();
     }
 
-    // Colors
     final textColor = widget.isDark ? Colors.white : const Color(0xFF2D2D2D);
     final watermarkColor = widget.isDark
         ? Colors.white.withOpacity(0.05)
@@ -213,8 +187,7 @@ class _ManifestoCardState extends State<ManifestoCard> {
     if (hasItems && _currentIndex >= widget.items.length) _currentIndex = 0;
 
     final String displayText = hasItems
-        ? widget.items[_currentIndex]
-              .toString() // Ensure string
+        ? widget.items[_currentIndex].toString()
         : "Tap + to add your manifesto";
 
     return ClipRRect(
@@ -331,19 +304,14 @@ class _ManifestoCardState extends State<ManifestoCard> {
 
                         Expanded(
                           child: AnimatedSwitcher(
-                            duration: const Duration(
-                              milliseconds: 600,
-                            ), // Slower fade for auto-play feel
+                            duration: const Duration(milliseconds: 600),
                             transitionBuilder: (child, animation) {
                               return FadeTransition(
                                 opacity: animation,
                                 child: SlideTransition(
                                   position:
                                       Tween<Offset>(
-                                        begin: const Offset(
-                                          0.0,
-                                          0.1,
-                                        ), // Subtle slide up
+                                        begin: const Offset(0.0, 0.1),
                                         end: Offset.zero,
                                       ).animate(
                                         CurvedAnimation(

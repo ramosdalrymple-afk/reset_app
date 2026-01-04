@@ -60,7 +60,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     }
   }
 
-  // --- NEW: Function to save to Firestore ---
+  // --- Function to save to Firestore ---
   void _saveQuoteToVault() async {
     final user = AuthService().currentUser;
     if (user == null || _dailyWisdom == null) return;
@@ -146,6 +146,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     );
   }
 
+  // --- UPDATED LAYOUT METHOD ---
   Widget _buildHomeContent(
     BuildContext context,
     HabitProvider habitProvider,
@@ -167,24 +168,44 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
     bool isStreakTooShort = diff.inSeconds < 30;
 
     return SafeArea(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 20.0,
+          ), // Reduced slightly for better mobile fit
+          child: Column(
+            children: [
+              const SizedBox(height: 20), // Top margin
+              // 1. HEADER
+              _buildHeader(habit.title, isDark),
+
+              const SizedBox(height: 30),
+
+              // 2. THE TIMER GROUP (Wrapped in a Container for cohesion)
+              // This groups the 4 floating bars into one solid "dashboard"
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.05)
+                      : Colors.white.withOpacity(0.8),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.1)
+                        : Colors.white.withOpacity(0.5),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
                   children: [
-                    const SizedBox(height: kToolbarHeight),
-
-                    // 1. HEADER
-                    _buildHeader(habit.title, isDark),
-                    const SizedBox(height: 20),
-
-                    // 2. THE TRADEMARK TIMER
                     TimeBar(
                       value: "${diff.inDays}",
                       label: "days",
@@ -192,7 +213,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                       percentage: dayPercent,
                       isDark: isDark,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12), // Consistent spacing
                     TimeBar(
                       value: "${diff.inHours % 24}",
                       label: "hours",
@@ -200,7 +221,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                       percentage: hourPercent,
                       isDark: isDark,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     TimeBar(
                       value: "${diff.inMinutes % 60}",
                       label: "minutes",
@@ -208,7 +229,7 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                       percentage: minPercent,
                       isDark: isDark,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     TimeBar(
                       value: "${diff.inSeconds % 60}",
                       label: "seconds",
@@ -216,54 +237,68 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
                       percentage: secPercent,
                       isDark: isDark,
                     ),
-
-                    const SizedBox(height: 24),
-
-                    // 3. ACTION BUTTONS
-                    ActionButtons(
-                      isAlreadyClean: isAlreadyClean,
-                      isStreakTooShort: isStreakTooShort,
-                      onCleanTap: () => _confirmClean(context, habit),
-                      onRelapseTap: () => _confirmReset(context, habit),
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    // 4. WEEKLY CHAIN
-                    WeeklyCalendar(history: habit.history, isDark: isDark),
-
-                    const SizedBox(height: 24),
-
-                    // 5. QUOTE CARD (With Heart Functionality)
-                    _isLoadingQuote
-                        ? SizedBox(
-                            height: 80,
-                            child: Center(
-                              child: Text(
-                                "...",
-                                style: TextStyle(
-                                  color: isDark ? Colors.white54 : Colors.grey,
-                                ),
-                              ),
-                            ),
-                          )
-                        : QuoteCard(
-                            isDark: isDark,
-                            quote:
-                                _dailyWisdom?.text ??
-                                "Your best days are ahead.",
-                            author: _dailyWisdom?.source ?? "Unknown",
-                            // Pass the save function here
-                            onSave: _saveQuoteToVault,
-                          ),
-
-                    const SizedBox(height: 40),
                   ],
                 ),
               ),
-            ),
-          );
-        },
+
+              const SizedBox(height: 30),
+
+              // 3. ACTION BUTTONS
+              ActionButtons(
+                isAlreadyClean: isAlreadyClean,
+                isStreakTooShort: isStreakTooShort,
+                onCleanTap: () => _confirmClean(context, habit),
+                onRelapseTap: () => _confirmReset(context, habit),
+              ),
+
+              const SizedBox(height: 30),
+
+              // 4. WEEKLY CHAIN (With label)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8.0, bottom: 10),
+                    child: Text(
+                      "RECENT HISTORY",
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                        color: isDark ? Colors.white54 : Colors.black45,
+                      ),
+                    ),
+                  ),
+                  WeeklyCalendar(history: habit.history, isDark: isDark),
+                ],
+              ),
+
+              const SizedBox(height: 30),
+
+              // 5. QUOTE CARD
+              _isLoadingQuote
+                  ? SizedBox(
+                      height: 80,
+                      child: Center(
+                        child: Text(
+                          "...",
+                          style: TextStyle(
+                            color: isDark ? Colors.white54 : Colors.grey,
+                          ),
+                        ),
+                      ),
+                    )
+                  : QuoteCard(
+                      isDark: isDark,
+                      quote: _dailyWisdom?.text ?? "Your best days are ahead.",
+                      author: _dailyWisdom?.source ?? "Unknown",
+                      onSave: _saveQuoteToVault,
+                    ),
+
+              const SizedBox(height: 100), // Bottom padding
+            ],
+          ),
+        ),
       ),
     );
   }

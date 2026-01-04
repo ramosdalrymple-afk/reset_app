@@ -13,10 +13,10 @@ class HabitProvider with ChangeNotifier {
   Habit? get selectedHabit => _selectedHabit;
   bool get isLoading => _isLoading;
 
-  // --- NEW: AGGREGATE HISTORY (ALL HABITS) ---
+  // --- EXISTING GETTERS & METHODS ---
+
   Map<String, dynamic> get combinedHistory {
     final Map<String, dynamic> combined = {};
-
     for (final habit in _habits) {
       habit.history.forEach((dateKey, status) {
         if (combined.containsKey(dateKey)) {
@@ -31,54 +31,198 @@ class HabitProvider with ChangeNotifier {
     return combined;
   }
 
-  // --- PLEDGE LOGIC ---
   bool get isPledgedToday {
     if (_selectedHabit?.lastPledgeDate == null) return false;
-
     final now = DateTime.now();
     final pledge = _selectedHabit!.lastPledgeDate!;
-
     return now.year == pledge.year &&
         now.month == pledge.month &&
         now.day == pledge.day;
   }
 
-  // UPDATED: Now accepts mood and note
-  Future<void> takeDailyPledge(String habitId, String mood, String note) async {
+  // --- NEW: TRIGGER TRACKING LOGIC ---
+
+  // 1. Log a new trigger
+  Future<void> logTrigger({
+    required String habitId,
+    required String triggerName,
+    required int intensity, // 1-10
+    required String note,
+  }) async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
 
     try {
-      final now = DateTime.now();
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('habits')
+          .doc(habitId)
+          .collection('trigger_logs') // New Sub-collection
+          .add({
+            'triggerName': triggerName,
+            'intensity': intensity,
+            'note': note,
+            'timestamp': FieldValue.serverTimestamp(),
+          });
+    } catch (e) {
+      debugPrint("Error logging trigger: $e");
+      rethrow;
+    }
+  }
 
-      final habitRef = FirebaseFirestore.instance
+  // 2. Get stream of logs (Real-time updates)
+  Stream<QuerySnapshot> getTriggerLogsStream(String habitId) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const Stream.empty();
+
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('habits')
+        .doc(habitId)
+        .collection('trigger_logs')
+        .orderBy('timestamp', descending: true)
+        .snapshots();
+  }
+
+  // 3. DELETE TRIGGER LOG (NEW)
+  Future<void> deleteTriggerLog(String habitId, String logId) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('habits')
+          .doc(habitId)
+          .collection('trigger_logs')
+          .doc(logId)
+          .delete();
+    } catch (e) {
+      debugPrint("Error deleting trigger log: $e");
+      rethrow;
+    }
+  }
+
+  // --- MOTIVATION MANAGEMENT ---
+
+  // 1. ADD REASON
+  Future<void> addMotivation(String habitId, String reason) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('habits')
+          .doc(habitId)
+          .update({
+            'motivation': FieldValue.arrayUnion([reason]),
+          });
+
+      final index = _habits.indexWhere((h) => h.id == habitId);
+      if (index != -1) {
+        _habits[index].motivation.add(reason);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint("Error adding motivation: $e");
+    }
+  }
+
+  // 2. EDIT REASON
+  Future<void> editMotivation(
+    String habitId,
+    String oldReason,
+    String newReason,
+  ) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    try {
+      final docRef = FirebaseFirestore.instance
           .collection('users')
           .doc(uid)
           .collection('habits')
           .doc(habitId);
 
-      // 1. Update Firestore Main Doc (for UI badge)
-      await habitRef.update({'lastPledgeDate': Timestamp.fromDate(now)});
+      final batch = FirebaseFirestore.instance.batch();
+      batch.update(docRef, {
+        'motivation': FieldValue.arrayRemove([oldReason]),
+      });
+      batch.update(docRef, {
+        'motivation': FieldValue.arrayUnion([newReason]),
+      });
+      await batch.commit();
 
-      // 2. Add to History Sub-collection (for Graphs/Journal)
+      final index = _habits.indexWhere((h) => h.id == habitId);
+      if (index != -1) {
+        final reasonIndex = _habits[index].motivation.indexOf(oldReason);
+        if (reasonIndex != -1) {
+          _habits[index].motivation[reasonIndex] = newReason;
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint("Error editing motivation: $e");
+    }
+  }
+
+  // 3. DELETE REASON
+  Future<void> deleteMotivation(String habitId, String reason) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('habits')
+          .doc(habitId)
+          .update({
+            'motivation': FieldValue.arrayRemove([reason]),
+          });
+
+      final index = _habits.indexWhere((h) => h.id == habitId);
+      if (index != -1) {
+        _habits[index].motivation.remove(reason);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint("Error deleting motivation: $e");
+    }
+  }
+
+  // --- HABIT ACTIONS ---
+
+  Future<void> takeDailyPledge(String habitId, String mood, String note) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      final now = DateTime.now();
+      final habitRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('habits')
+          .doc(habitId);
+      await habitRef.update({'lastPledgeDate': Timestamp.fromDate(now)});
       await habitRef.collection('pledgeHistory').add({
         'date': Timestamp.fromDate(now),
         'mood': mood,
         'note': note,
       });
-
-      // 3. Refresh Data
       await fetchHabits();
     } catch (e) {
       debugPrint("Pledge Error: $e");
     }
   }
 
-  // --- FETCH PLEDGE HISTORY STREAM ---
   Stream<QuerySnapshot> getPledgeHistoryStream(String habitId) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return const Stream.empty();
-
     return FirebaseFirestore.instance
         .collection('users')
         .doc(uid)
@@ -89,13 +233,10 @@ class HabitProvider with ChangeNotifier {
         .snapshots();
   }
 
-  // --- FETCH HABITS ---
   Future<void> fetchHabits() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
     _isLoading = true;
-
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
@@ -126,34 +267,27 @@ class HabitProvider with ChangeNotifier {
     }
   }
 
-  // --- SELECT HABIT ---
   void selectHabit(Habit habit) {
     _selectedHabit = habit;
     notifyListeners();
   }
 
-  // --- ADD HABIT (UPDATED) ---
   Future<void> addHabit(String title, DateTime date, String motivation) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
     try {
       final newDoc = FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('habits')
           .doc();
-
-      // Ensure motivation is initialized as a List
       final newHabit = Habit(
         id: newDoc.id,
         title: title,
         startDate: date,
-        motivation: [motivation], // <--- WRAPPED IN LIST
+        motivation: [motivation],
       );
-
       await newDoc.set(newHabit.toMap());
-
       _habits.insert(0, newHabit);
       _selectedHabit = newHabit;
       notifyListeners();
@@ -163,11 +297,9 @@ class HabitProvider with ChangeNotifier {
     }
   }
 
-  // --- DELETE HABIT ---
   Future<void> deleteHabit(String habitId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
     try {
       await FirebaseFirestore.instance
           .collection('users')
@@ -175,9 +307,7 @@ class HabitProvider with ChangeNotifier {
           .collection('habits')
           .doc(habitId)
           .delete();
-
       _habits.removeWhere((h) => h.id == habitId);
-
       if (_selectedHabit?.id == habitId) {
         if (_habits.isNotEmpty) {
           _selectedHabit = _habits.first;
@@ -185,7 +315,6 @@ class HabitProvider with ChangeNotifier {
           _selectedHabit = null;
         }
       }
-
       notifyListeners();
     } catch (e) {
       debugPrint("Error deleting habit: $e");
@@ -193,15 +322,12 @@ class HabitProvider with ChangeNotifier {
     }
   }
 
-  // --- MARK DAY AS CLEAN ---
   Future<void> markDayClean(String habitId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
     final now = DateTime.now();
     final String dateKey =
         "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
-
     try {
       await FirebaseFirestore.instance
           .collection('users')
@@ -209,7 +335,6 @@ class HabitProvider with ChangeNotifier {
           .collection('habits')
           .doc(habitId)
           .update({'history.$dateKey': 'clean'});
-
       await fetchHabits();
     } catch (e) {
       debugPrint("Error marking clean: $e");
@@ -217,22 +342,18 @@ class HabitProvider with ChangeNotifier {
     }
   }
 
-  // --- RESET HABIT (RELAPSE) WITH TRIGGER MAP ---
   Future<void> resetHabit(String habitId, {required String trigger}) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
     try {
       final habit = _habits.firstWhere((h) => h.id == habitId);
       final currentStreakDays = DateTime.now()
           .difference(habit.startDate)
           .inDays;
-
       int newLongestStreak = habit.longestStreak;
       if (currentStreakDays > habit.longestStreak) {
         newLongestStreak = currentStreakDays;
       }
-
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -245,7 +366,6 @@ class HabitProvider with ChangeNotifier {
             'triggerStats.$trigger': FieldValue.increment(1),
             'history.${_getTodayKey()}': 'relapse',
           });
-
       await fetchHabits();
     } catch (e) {
       debugPrint("Error resetting habit: $e");

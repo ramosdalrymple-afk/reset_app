@@ -3,10 +3,15 @@ import 'package:provider/provider.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
 
+// Screens
 import 'package:my_auth_project/screens/home/home_tab.dart';
 import 'package:my_auth_project/screens/progress/progress_tab.dart';
 import 'package:my_auth_project/screens/motivation/motivation_tab.dart';
 import 'package:my_auth_project/screens/settings/settings_tab.dart';
+
+// --- FIXED IMPORT ---
+// We now point to the new file name: support_hub.dart
+import 'package:my_auth_project/screens/journal/support_hub.dart';
 
 import '../../widgets/global_app_bar.dart';
 
@@ -23,6 +28,7 @@ class _NavbarState extends State<Navbar> {
   final List<Widget> _screens = [
     const HomeTab(),
     const ProgressTab(),
+    const CommunityTab(), // This matches the class name inside support_hub.dart
     const MotivationTab(),
     const SettingsTab(),
   ];
@@ -55,6 +61,13 @@ class _NavbarState extends State<Navbar> {
             selectedIcon: Icon(PhosphorIcons.chartBar(PhosphorIconsStyle.fill)),
             label: 'Progress',
           ),
+          // --- UPDATED LABEL & ICON ---
+          NavigationDestination(
+            icon: Icon(PhosphorIcons.lifebuoy()),
+            selectedIcon: Icon(PhosphorIcons.lifebuoy(PhosphorIconsStyle.fill)),
+            label: 'Support Hub',
+          ),
+          // ----------------------------
           NavigationDestination(
             icon: Icon(PhosphorIcons.lightning()),
             selectedIcon: Icon(

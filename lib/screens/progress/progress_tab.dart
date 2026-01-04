@@ -5,17 +5,14 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:my_auth_project/services/theme_provider.dart';
 import 'package:my_auth_project/services/habit_provider.dart';
 
-// --- NEW IMPORTS ---
+// --- WIDGET IMPORTS ---
 import 'widgets/daily_pledge_card.dart';
 import 'widgets/mood_history_graph.dart';
 import 'widgets/mood_history_list.dart';
 import 'widgets/progress_calendar.dart';
 import 'widgets/vulnerability_analysis.dart';
 import 'widgets/animated_orb_background.dart';
-
-// --- WIDGET IMPORTS ---
-// If you have StatBox in a separate file, keep your import.
-// If it's in the same file, the class is at the bottom of this code.
+import 'widgets/milestone_timeline.dart';
 import 'package:my_auth_project/screens/progress/widgets/stats_box.dart';
 
 class ProgressTab extends StatefulWidget {
@@ -27,12 +24,11 @@ class ProgressTab extends StatefulWidget {
 
 class _ProgressTabState extends State<ProgressTab> {
   Timer? _ticker;
-  int _selectedView = 0; // 0 = Overview, 1 = Insights
+  int _selectedView = 0; // 0 = Overview, 1 = Insights, 2 = Journey
 
   @override
   void initState() {
     super.initState();
-    // Keep ticker for live streak updates
     _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) setState(() {});
     });
@@ -73,11 +69,9 @@ class _ProgressTabState extends State<ProgressTab> {
           );
         }
 
-        // 1. Calculate Live Duration
         final Duration diff = DateTime.now().difference(currentHabit.startDate);
 
-        // 2. LOGIC FIX: Determine the actual longest streak to display
-        // If your current run is better than your history, show the current run!
+        // Calculate longest streak for display
         final int currentStreakDays = diff.inDays;
         final int displayLongest =
             (currentStreakDays > currentHabit.longestStreak)
@@ -100,12 +94,12 @@ class _ProgressTabState extends State<ProgressTab> {
                       _buildHeader(currentHabit.title, isDark),
                       const SizedBox(height: 24),
 
-                      // --- TOGGLE VIEW ---
+                      // --- TOGGLE VIEW (3 TABS) ---
                       _buildSegmentedControl(isDark),
                       const SizedBox(height: 24),
 
+                      // === VIEW 1: OVERVIEW ===
                       if (_selectedView == 0) ...[
-                        // === OVERVIEW TAB ===
                         const DailyPledgeCard(),
                         const SizedBox(height: 24),
 
@@ -121,7 +115,6 @@ class _ProgressTabState extends State<ProgressTab> {
                             const SizedBox(width: 16),
                             StatBox(
                               label: "Longest Streak",
-                              // Use the fixed variable here
                               value: "$displayLongest days",
                               accent: Colors.orangeAccent,
                               isDark: isDark,
@@ -131,13 +124,13 @@ class _ProgressTabState extends State<ProgressTab> {
                         ),
                         const SizedBox(height: 32),
 
-                        // New Calendar Widget handles the "All Habits" toggle internally
                         ProgressCalendar(
                           selectedHabit: currentHabit,
                           isDark: isDark,
                         ),
-                      ] else ...[
-                        // === INSIGHTS TAB ===
+                      ]
+                      // === VIEW 2: INSIGHTS ===
+                      else if (_selectedView == 1) ...[
                         StatBox(
                           label: "Total Relapses",
                           value: "${currentHabit.totalRelapses}",
@@ -165,6 +158,22 @@ class _ProgressTabState extends State<ProgressTab> {
 
                         const SizedBox(height: 32),
                         const MoodHistoryList(),
+                      ]
+                      // === VIEW 3: JOURNEY (MILESTONES) ===
+                      else ...[
+                        Center(
+                          child: Text(
+                            "ROAD TO RECOVERY",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 2.0,
+                              color: isDark ? Colors.white54 : Colors.black54,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        const MilestoneTimeline(),
                       ],
 
                       const SizedBox(height: 80),
@@ -179,7 +188,7 @@ class _ProgressTabState extends State<ProgressTab> {
     );
   }
 
-  // --- SIMPLE HEADER WIDGETS ---
+  // --- WIDGET HELPERS ---
 
   Widget _buildHeader(String habitTitle, bool isDark) {
     return Column(
@@ -250,6 +259,7 @@ class _ProgressTabState extends State<ProgressTab> {
         children: [
           _buildSegmentButton("Overview", 0, isDark),
           _buildSegmentButton("Insights", 1, isDark),
+          _buildSegmentButton("Journey", 2, isDark), // New Tab
         ],
       ),
     );
@@ -283,7 +293,7 @@ class _ProgressTabState extends State<ProgressTab> {
             text,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13, // Slightly smaller to fit 3 items
               fontWeight: FontWeight.bold,
               color: isSelected
                   ? (isDark ? Colors.white : Colors.black)
