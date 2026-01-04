@@ -3,6 +3,7 @@ import 'package:desktop_webview_auth/desktop_webview_auth.dart';
 import 'package:desktop_webview_auth/google.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:my_auth_project/services/saved_account_service.dart'; // 🟢 ADD IMPORT
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -22,6 +23,7 @@ class AuthService {
       // Sync to Firestore even for email signups
       if (userCredential.user != null) {
         await _syncUserToFirestore(userCredential.user!);
+        await SavedAccountService().saveCurrentUser(); // 🟢 SAVE LOCALLY
       }
       return "Success";
     } on FirebaseAuthException catch (e) {
@@ -38,6 +40,7 @@ class AuthService {
   }) async {
     try {
       await _auth.signInWithEmailAndPassword(email: email, password: password);
+      await SavedAccountService().saveCurrentUser(); // 🟢 SAVE LOCALLY
       return "Success";
     } on FirebaseAuthException catch (e) {
       return e.message;
@@ -68,6 +71,7 @@ class AuthService {
 
         if (userCredential.user != null) {
           await _syncUserToFirestore(userCredential.user!);
+          await SavedAccountService().saveCurrentUser(); // 🟢 SAVE LOCALLY
         }
 
         return "Success";
@@ -94,7 +98,7 @@ class AuthService {
     }
   }
 
-  // Update Bio and Phone (This matches your EditProfileScreen logic)
+  // Update Bio and Phone
   Future<void> updateUserProfile({
     required String bio,
     required String phoneNumber,
@@ -107,14 +111,14 @@ class AuthService {
           'phoneNumber': phoneNumber,
           'lastUpdated': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
+        await SavedAccountService().saveCurrentUser(); // 🟢 UPDATE LOCAL DATA
       } catch (e) {
         debugPrint("Update Profile Error: $e");
-        rethrow; // Pass error back to UI for the SnackBar
+        rethrow;
       }
     }
   }
 
-  // Stream for real-time profile updates (Bio/Phone)
   Stream<DocumentSnapshot> getUserDoc(String uid) {
     return _db.collection('users').doc(uid).snapshots();
   }

@@ -7,7 +7,7 @@ import '../services/theme_provider.dart';
 import '../services/habit_provider.dart';
 import '../screens/profile/profile_screen.dart';
 import 'habit_switcher.dart';
-import 'user_avatar.dart';
+import 'user_avatar.dart'; // Ensure this points to your widget file
 
 class GlobalAppBar extends StatelessWidget implements PreferredSizeWidget {
   const GlobalAppBar({super.key});
@@ -52,8 +52,10 @@ class GlobalAppBar extends StatelessWidget implements PreferredSizeWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 HabitSwitcher(habit: currentHabit, isDark: isDark),
+
+                // 🟢 UPDATED: Use photoURL instead of User object
                 UserAvatar(
-                  user: user,
+                  photoURL: user?.photoURL, // Pass the String URL
                   isDark: isDark,
                   onTap: () {
                     Navigator.push(

@@ -8,6 +8,9 @@ import 'package:my_auth_project/services/theme_provider.dart';
 import 'package:my_auth_project/services/community_provider.dart';
 import 'package:my_auth_project/models/community_post_model.dart';
 import 'package:my_auth_project/screens/journal/post_detail_screen.dart';
+import 'package:my_auth_project/widgets/user_avatar.dart';
+import 'package:my_auth_project/services/habit_provider.dart';
+import 'package:my_auth_project/models/habit_model.dart';
 
 class CommunityTab extends StatelessWidget {
   const CommunityTab({super.key});
@@ -15,10 +18,6 @@ class CommunityTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
-    final communityProvider = Provider.of<CommunityProvider>(
-      context,
-      listen: false,
-    );
 
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
@@ -28,83 +27,159 @@ class CommunityTab extends StatelessWidget {
         label: const Text("Share Story", style: TextStyle(color: Colors.white)),
       ),
       body: SafeArea(
-        child: StreamBuilder<List<CommunityPost>>(
-          stream: communityProvider.postsStream,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
+        child: Consumer<CommunityProvider>(
+          builder: (context, communityProvider, child) {
+            return StreamBuilder<List<CommunityPost>>(
+              stream: communityProvider.postsStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-            final posts = snapshot.data ?? [];
+                // 🟢 1. GET ALL DATA
+                final allPosts = snapshot.data ?? [];
 
-            return CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "SUPPORT HUB",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.5,
-                            color: isDark ? Colors.white54 : Colors.black54,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "Community Stories",
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : Colors.black,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (posts.isEmpty)
-                  SliverFillRemaining(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            PhosphorIcons.newspaper(),
-                            size: 48,
-                            color: Colors.grey,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            "No stories yet.\nBe the first to share!",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: isDark ? Colors.white54 : Colors.grey,
+                // 🟢 2. EXTRACT UNIQUE HABITS FROM THE DATABASE (POSTS)
+                // This creates a set of all habits that actually exist in the feed
+                final Set<String> uniqueHabits = allPosts
+                    .map((p) => p.habit)
+                    .toSet();
+                final List<String> filterOptions = ['All', ...uniqueHabits];
+
+                // 🟢 3. FILTER THE POSTS FOR DISPLAY
+                final visiblePosts = communityProvider.selectedFilter == 'All'
+                    ? allPosts
+                    : allPosts
+                          .where(
+                            (p) => p.habit == communityProvider.selectedFilter,
+                          )
+                          .toList();
+
+                return CustomScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "SUPPORT HUB",
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.5,
+                                color: isDark ? Colors.white54 : Colors.black54,
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 4),
+                            Text(
+                              "Community Stories",
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+
+                            // 🟢 4. WRAP WIDGET FOR RESPONSIVENESS
+                            // This allows chips to flow to the next line automatically
+                            Wrap(
+                              spacing: 8.0,
+                              runSpacing: 8.0,
+                              children: filterOptions.map((filter) {
+                                final isSelected =
+                                    communityProvider.selectedFilter == filter;
+                                return FilterChip(
+                                  label: Text(filter),
+                                  selected: isSelected,
+                                  onSelected: (bool selected) {
+                                    if (selected) {
+                                      communityProvider.setFilter(filter);
+                                    }
+                                  },
+                                  backgroundColor: isDark
+                                      ? Colors.white10
+                                      : Colors.grey[200],
+                                  selectedColor: const Color(0xFF6366F1),
+                                  labelStyle: TextStyle(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : (isDark
+                                              ? Colors.white70
+                                              : Colors.black87),
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    fontSize: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                    side: BorderSide(
+                                      color: isSelected
+                                          ? const Color(0xFF6366F1)
+                                          : Colors.transparent,
+                                    ),
+                                  ),
+                                  showCheckmark: false,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 0,
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  )
-                else
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 8,
+
+                    if (visiblePosts.isEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                PhosphorIcons.funnelX(),
+                                size: 48,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                "No stories found for this filter.",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: isDark ? Colors.white54 : Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        child: _buildFeedCard(context, posts[index], isDark),
-                      );
-                    }, childCount: posts.length),
-                  ),
-                const SliverToBoxAdapter(child: SizedBox(height: 80)),
-              ],
+                      )
+                    else
+                      SliverList(
+                        delegate: SliverChildBuilderDelegate((context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 8,
+                            ),
+                            child: _buildFeedCard(
+                              context,
+                              visiblePosts[index],
+                              isDark,
+                            ),
+                          );
+                        }, childCount: visiblePosts.length),
+                      ),
+                    const SliverToBoxAdapter(child: SizedBox(height: 80)),
+                  ],
+                );
+              },
             );
           },
         ),
@@ -112,11 +187,11 @@ class CommunityTab extends StatelessWidget {
     );
   }
 
+  // ... (Keep _buildFeedCard, _showAddPostDialog, and _ShareStoryDialog exactly as they were)
+
   Widget _buildFeedCard(BuildContext context, CommunityPost post, bool isDark) {
     final currentUid = FirebaseAuth.instance.currentUser?.uid;
     final isLiked = post.likedBy.contains(currentUid);
-
-    // 🟢 CHECK IF CURRENT USER IS THE AUTHOR
     final isAuthor = currentUid == post.userId;
 
     final dateString = DateFormat(
@@ -167,16 +242,11 @@ class CommunityTab extends StatelessWidget {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: accentColor.withOpacity(0.2),
+                UserAvatar(
+                  photoURL: post.userProfilePic,
+                  userName: post.userName,
+                  isDark: isDark,
                   radius: 20,
-                  child: Text(
-                    post.userInitial,
-                    style: TextStyle(
-                      color: accentColor,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -200,8 +270,6 @@ class CommunityTab extends StatelessWidget {
                     ],
                   ),
                 ),
-
-                // 🟢 OPTION MENU: Only show if author
                 if (isAuthor)
                   PopupMenuButton<String>(
                     icon: Icon(Icons.more_horiz, color: Colors.grey),
@@ -277,18 +345,21 @@ class CommunityTab extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  "•  ${post.topic.toUpperCase()}",
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 1,
-                    color: isDark ? Colors.white30 : Colors.black38,
+                Expanded(
+                  child: Text(
+                    "•  ${post.topic.toUpperCase()}",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1,
+                      color: isDark ? Colors.white30 : Colors.black38,
+                    ),
                   ),
                 ),
               ],
             ),
-
             const SizedBox(height: 12),
             Text(
               post.content,
@@ -331,7 +402,12 @@ class CommunityTab extends StatelessWidget {
                 const SizedBox(width: 20),
                 Icon(PhosphorIcons.chatCircle(), size: 20, color: Colors.grey),
                 const SizedBox(width: 6),
-                const Text("Comment", style: TextStyle(color: Colors.grey)),
+                Text(
+                  post.commentCount > 0
+                      ? "${post.commentCount} Comments"
+                      : "Comment",
+                  style: const TextStyle(color: Colors.grey),
+                ),
               ],
             ),
           ],
@@ -347,7 +423,6 @@ class CommunityTab extends StatelessWidget {
     );
   }
 
-  // 🟢 LOGIC: Show Edit Dialog (Pre-filled)
   void _showEditPostDialog(
     BuildContext context,
     bool isDark,
@@ -359,7 +434,6 @@ class CommunityTab extends StatelessWidget {
     );
   }
 
-  // 🟢 LOGIC: Delete Confirmation
   void _confirmDelete(BuildContext context, String postId) {
     showDialog(
       context: context,
@@ -387,18 +461,16 @@ class CommunityTab extends StatelessWidget {
   }
 }
 
-// 🟢 UPDATED DIALOG: Handles both "Add" and "Edit"
+// 🟢 _ShareStoryDialog class stays exactly the same as before
 class _ShareStoryDialog extends StatefulWidget {
-  final CommunityPost? postToEdit; // If null, it's a new post
-
+  final CommunityPost? postToEdit;
   const _ShareStoryDialog({this.postToEdit});
-
   @override
   State<_ShareStoryDialog> createState() => _ShareStoryDialogState();
 }
 
 class _ShareStoryDialogState extends State<_ShareStoryDialog> {
-  late TextEditingController _habitController;
+  String? _selectedHabit;
   late TextEditingController _topicController;
   late TextEditingController _contentController;
   bool _isUploading = false;
@@ -406,10 +478,7 @@ class _ShareStoryDialogState extends State<_ShareStoryDialog> {
   @override
   void initState() {
     super.initState();
-    // 🟢 Pre-fill if editing
-    _habitController = TextEditingController(
-      text: widget.postToEdit?.habit ?? '',
-    );
+    _selectedHabit = widget.postToEdit?.habit;
     _topicController = TextEditingController(
       text: widget.postToEdit?.topic ?? '',
     );
@@ -420,7 +489,6 @@ class _ShareStoryDialogState extends State<_ShareStoryDialog> {
 
   @override
   void dispose() {
-    _habitController.dispose();
     _topicController.dispose();
     _contentController.dispose();
     super.dispose();
@@ -430,6 +498,12 @@ class _ShareStoryDialogState extends State<_ShareStoryDialog> {
   Widget build(BuildContext context) {
     final isDark = Provider.of<ThemeProvider>(context).isDarkMode;
     final isEditing = widget.postToEdit != null;
+    final habitProvider = Provider.of<HabitProvider>(context, listen: false);
+    final List<Habit> userHabits = habitProvider.habits;
+
+    if (_selectedHabit == null && userHabits.isNotEmpty) {
+      _selectedHabit = userHabits.first.title;
+    }
 
     return AlertDialog(
       backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
@@ -442,12 +516,19 @@ class _ShareStoryDialogState extends State<_ShareStoryDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildTextField(
-            isDark,
-            _habitController,
-            "Habit",
-            "e.g., Smoking, Gaming",
-          ),
+          if (userHabits.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: Text(
+                "You need to create a habit in your dashboard first!",
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            )
+          else
+            _buildHabitDropdown(isDark, userHabits),
           const SizedBox(height: 12),
           _buildTextField(
             isDark,
@@ -474,37 +555,33 @@ class _ShareStoryDialogState extends State<_ShareStoryDialog> {
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF6366F1),
           ),
-          onPressed: _isUploading
+          onPressed: _isUploading || userHabits.isEmpty
               ? null
               : () async {
-                  if (_habitController.text.isNotEmpty &&
+                  if (_selectedHabit != null &&
                       _contentController.text.isNotEmpty) {
                     setState(() => _isUploading = true);
-
                     try {
                       if (isEditing) {
-                        // 🟢 CALL UPDATE
                         await Provider.of<CommunityProvider>(
                           context,
                           listen: false,
                         ).updatePost(
                           postId: widget.postToEdit!.id,
-                          habit: _habitController.text,
+                          habit: _selectedHabit!,
                           topic: _topicController.text,
                           content: _contentController.text,
                         );
                       } else {
-                        // 🟢 CALL ADD
                         await Provider.of<CommunityProvider>(
                           context,
                           listen: false,
                         ).addPost(
-                          habit: _habitController.text,
+                          habit: _selectedHabit!,
                           topic: _topicController.text,
                           content: _contentController.text,
                         );
                       }
-
                       if (mounted) Navigator.pop(context);
                     } catch (e) {
                       if (mounted) {
@@ -529,6 +606,56 @@ class _ShareStoryDialogState extends State<_ShareStoryDialog> {
                   isEditing ? "Save" : "Post",
                   style: const TextStyle(color: Colors.white),
                 ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHabitDropdown(bool isDark, List<Habit> habits) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Select Habit",
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white70 : Colors.black54,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.black12 : Colors.grey[100],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedHabit,
+              dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+              icon: Icon(
+                PhosphorIcons.caretDown(),
+                color: isDark ? Colors.white54 : Colors.grey,
+              ),
+              isExpanded: true,
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black,
+                fontSize: 16,
+              ),
+              items: habits.map((habit) {
+                return DropdownMenuItem<String>(
+                  value: habit.title,
+                  child: Text(habit.title),
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                setState(() {
+                  _selectedHabit = newValue;
+                });
+              },
+            ),
+          ),
         ),
       ],
     );

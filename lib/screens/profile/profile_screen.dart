@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../services/auth_service.dart';
 import '../../services/theme_provider.dart';
+import 'package:my_auth_project/screens/settings/widget/switch_account_sheet.dart'; // 🟢 ADD IMPORT
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -13,7 +14,6 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  // FIX 1: We don't store 'user' in a final variable. We get it fresh.
   User? get currentUser => FirebaseAuth.instance.currentUser;
 
   late TextEditingController _nameController;
@@ -38,7 +38,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _updateName() async {
-    // Prevent empty names
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -49,22 +48,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // 1. Update Firebase
       await currentUser?.updateDisplayName(_nameController.text.trim());
-
-      // 2. Reload the user to ensure local data is fresh
       await currentUser?.reload();
 
-      // 3. Update UI
       if (mounted) {
         setState(() {
           _isEditing = false;
           _isLoading = false;
         });
-
-        // Close keyboard
         _nameFocusNode.unfocus();
-
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text("Identity updated successfully."),
@@ -82,14 +74,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _toggleEdit() {
     setState(() {
       if (_isEditing) {
-        // If we were editing and clicked the button (Cancel action), reset text
         _nameController.text = currentUser?.displayName ?? "";
         _nameFocusNode.unfocus();
         _isEditing = false;
       } else {
-        // Start editing
         _isEditing = true;
-        // Delay focus slightly to allow UI to rebuild first
         Future.delayed(const Duration(milliseconds: 100), () {
           _nameFocusNode.requestFocus();
         });
@@ -178,7 +167,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         const SizedBox(height: 30),
 
-                        // Avatar (Visual only for now)
+                        // Avatar
                         _buildAvatar(currentUser, isDark),
 
                         const SizedBox(height: 40),
@@ -209,8 +198,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               _buildEditableRow(
                                 label: "DISPLAY NAME",
                                 isDark: isDark,
-                                // Icon logic: If editing, show X to cancel. If not, show Edit.
-                                // If Loading, show spinner.
                                 icon: _isLoading
                                     ? const SizedBox(
                                         width: 18,
@@ -222,7 +209,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     : GestureDetector(
                                         onTap: () {
                                           if (_isEditing) {
-                                            // If button clicked while editing, treat as Save
                                             _updateName();
                                           } else {
                                             _toggleEdit();
@@ -325,64 +311,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildAvatar(User? user, bool isDark) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // Glow effect
-        Container(
-          width: 110,
-          height: 110,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.blueAccent.withOpacity(0.3),
-                blurRadius: 30,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-        ),
-        // Border & Image
-        Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: Colors.blueAccent.withOpacity(0.5),
-              width: 2,
-            ),
-            color: Theme.of(context).scaffoldBackgroundColor,
-          ),
-          child: CircleAvatar(
-            radius: 50,
-            backgroundColor: isDark ? Colors.white10 : Colors.grey[200],
-            backgroundImage: user?.photoURL != null
-                ? NetworkImage(user!.photoURL!)
-                : null,
-            child: user?.photoURL == null
-                ? Icon(
-                    Icons.person,
-                    size: 40,
-                    color: isDark ? Colors.white54 : Colors.black45,
-                  )
-                : null,
-          ),
-        ),
-        // Camera Icon (Visual only)
-        Positioned(
-          bottom: 0,
-          right: 0,
-          child: Container(
-            padding: const EdgeInsets.all(6),
-            decoration: const BoxDecoration(
-              color: Colors.blueAccent,
+    return GestureDetector(
+      // 🟢 1. Open Switch Sheet on Tap
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => const SwitchAccountSheet(),
+        );
+      },
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Glow effect
+          Container(
+            width: 110,
+            height: 110,
+            decoration: BoxDecoration(
               shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blueAccent.withOpacity(0.3),
+                  blurRadius: 30,
+                  spreadRadius: 1,
+                ),
+              ],
             ),
-            child: const Icon(Icons.camera_alt, size: 14, color: Colors.white),
           ),
-        ),
-      ],
+          // Border & Image
+          Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.blueAccent.withOpacity(0.5),
+                width: 2,
+              ),
+              color: Theme.of(context).scaffoldBackgroundColor,
+            ),
+            child: CircleAvatar(
+              radius: 50,
+              backgroundColor: isDark ? Colors.white10 : Colors.grey[200],
+              backgroundImage: user?.photoURL != null
+                  ? NetworkImage(user!.photoURL!)
+                  : null,
+              child: user?.photoURL == null
+                  ? Icon(
+                      Icons.person,
+                      size: 40,
+                      color: isDark ? Colors.white54 : Colors.black45,
+                    )
+                  : null,
+            ),
+          ),
+          // 🟢 2. Changed to "Switch/Swap" Icon
+          Positioned(
+            bottom: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(
+                color: Colors.blueAccent,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.swap_horiz,
+                size: 14,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

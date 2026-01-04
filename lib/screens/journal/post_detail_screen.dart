@@ -5,6 +5,8 @@ import 'package:timeago/timeago.dart' as timeago;
 import 'package:my_auth_project/services/theme_provider.dart';
 import 'package:my_auth_project/services/community_provider.dart';
 import 'package:my_auth_project/models/community_post_model.dart';
+// 🟢 Import your custom avatar
+import 'package:my_auth_project/widgets/user_avatar.dart';
 
 class PostDetailScreen extends StatelessWidget {
   final CommunityPost post;
@@ -36,12 +38,11 @@ class PostDetailScreen extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    CircleAvatar(
-                      backgroundColor: Colors.blueAccent,
-                      child: Text(
-                        post.userInitial,
-                        style: const TextStyle(color: Colors.white),
-                      ),
+                    // 🟢 USE YOUR CUSTOM WIDGET
+                    UserAvatar(
+                      photoURL: post.userProfilePic,
+                      isDark: isDark,
+                      radius: 20,
                     ),
                     const SizedBox(width: 12),
                     Column(
@@ -82,8 +83,9 @@ class PostDetailScreen extends StatelessWidget {
             child: StreamBuilder<List<Comment>>(
               stream: provider.getCommentsStream(post.id),
               builder: (context, snapshot) {
-                if (!snapshot.hasData)
+                if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
+                }
                 final comments = snapshot.data!;
 
                 if (comments.isEmpty) {
@@ -105,16 +107,11 @@ class PostDetailScreen extends StatelessWidget {
                     final comment = comments[index];
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: CircleAvatar(
-                        radius: 16,
-                        backgroundColor: Colors.grey[300],
-                        child: Text(
-                          comment.userName[0],
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.black,
-                          ),
-                        ),
+                      // 🟢 USE YOUR CUSTOM WIDGET FOR COMMENTS
+                      leading: UserAvatar(
+                        photoURL: comment.userProfilePic,
+                        isDark: isDark,
+                        radius: 16, // Slightly smaller for comments
                       ),
                       title: Text(
                         comment.userName,
@@ -165,7 +162,7 @@ class PostDetailScreen extends StatelessWidget {
                     ),
                     decoration: InputDecoration(
                       hintText: "Add a comment...",
-                      hintStyle: TextStyle(color: Colors.grey),
+                      hintStyle: const TextStyle(color: Colors.grey),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide.none,
