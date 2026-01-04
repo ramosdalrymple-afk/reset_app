@@ -57,6 +57,13 @@ Reset operates on a Serverless Architecture using Firebase as the backend-as-a-s
     - Context-Aware Prompting: Utilizes a Generative AI pipeline (Google Gemini 1.5 Flash) that injects real-time habit metadata—including streak duration, user manifesto, and current trigger state—into the model's system instructions.
     - Urge Surfing Protocol: The AI is hard-coded with clinical "Urge Surfing" techniques, moving beyond generic chat to provide structured behavioral intervention during high-risk moments.
     - Intent-Based Navigation (Token Parsing): The LLM is trained to output hidden signals (e.g., <NAV:URGE>, <NAV:CRISIS>). The Flutter frontend intercepts these tokens to render dynamic "Action Chips" that deep-link the user to specific app modules like the Breathing Tool or Emergency Hotline.
+ 5. Community Filtering Engine (New) -
+    - Dynamic Heuristic Filtering: Filters the global feed based on unique habit nodes currently existing in the database.
+    - Client-Side Stream Processing: Uses a centralized CommunityProvider to perform real-time content sorting, ensuring zero-latency transitions between habit-specific support hubs.
+ 6. Session Management Layer (New) -
+    - Persistent User Registry: Utilizes SharedPreferences to maintain a local registry of authenticated users, enabling high-speed identity switching.
+    - Provider-Aware Re-authentication: Intelligently detects the original auth provider (Google vs Email) to trigger seamless automated login sequences during account swaps.
+      
 ### Features
 
 **🧠 Core Recovery Tools**
@@ -65,6 +72,12 @@ Reset operates on a Serverless Architecture using Firebase as the backend-as-a-s
 - Multi-Node Tracking: distinct logic containers for different habits (e.g., Substance, Digital hygiene).
 - Manifesto Anchoring: cinematic display of the user's "Main Reason" using typographic hierarchy to enforce psychological commitment.
 - The Wisdom Jar: An interactive, physics-simulated module using flutter_animate.
+
+**🤝 Community & Support**
+- Professional Support Hub: A filtered global feed where users share "Community Stories" categorized by habit.
+- Dynamic Content Filtering: Responsive "Wrap" layout filters that allow users to drill down into specific recovery tracks (e.g., substance vs. digital).
+- Identity Swapping: Integrated "Switch Account" feature allowing users to manage multiple recovery profiles without logging out.
+- Support Interactions: Real-time "Heart" reactions and threaded comments for community-based validation.
 
 **📊 Analytics & Insights**
 - Vulnerability Analysis: Tracks relapse triggers to identify high-risk emotional states.
@@ -81,7 +94,8 @@ Reset operates on a Serverless Architecture using Firebase as the backend-as-a-s
    - Relapse: Triggers the "Hard Reset" protocol. The user selects a trigger (e.g., "Stress"), the startDate is reset to now(), and the streak is archived.
 4. Consultation: Interaction with "The Anchor" AI coach for situational strategies or the Wisdom Jar for randomized stoic advice.
 5. Journaling: Reflection on triggers and gratitude.
-
+6. Community Engagement: Sharing insights or seeking advice in the habit-filtered Community Stories.
+   
 ### 🛠 Tech Stack & Dependencies
 - Core Framework: Flutter
 - Backend: Firebase Auth, Cloud Firestore
@@ -89,6 +103,7 @@ Reset operates on a Serverless Architecture using Firebase as the backend-as-a-s
 - Communication: http (RESTful API integration)
 - Visualization: fl_chart (Charts), flutter_animate (Complex sequences), confetti (Particle effects), lottie (Vector animations)
 - UI Assets: phosphor_flutter (Iconography), google_fonts
+- State Management: Provider
   
 **Authors**
 - Dalrymple Ramos - Lead Developer 
